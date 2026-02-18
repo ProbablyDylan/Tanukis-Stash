@@ -215,10 +215,16 @@ struct PostPreviewFrame: View {
                 VStack() {
                     Spacer()
                     HStack(alignment: .bottom) {
-                        Text("⬆️\(post.score.total.formatted(.number.notation(.compactName))) ❤️\(post.fav_count.formatted(.number.notation(.compactName)))")
-                            .font(.system(size: 12))
-                            .fontWeight(.bold)
-                            .foregroundColor(Color.white)
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                            Text(post.score.total.formatted(.number.notation(.compactName)))
+                            Image(systemName: "heart.fill")
+                                .padding(.leading, 2)
+                            Text(post.fav_count.formatted(.number.notation(.compactName)))
+                        }
+                        .font(.system(size: 12))
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.white)
                         Spacer()
                     }
                     .padding(5.0)

@@ -36,19 +36,28 @@ struct PostView: View {
                             height: calculateImageHeight(geometry: geometry)
                         )
                         .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
-                    VStack {
-                        HStack {
-                            Text(post.tags.artist.joined(separator: ", "));
-                            Spacer();
-                        }
-                        HStack {
-                            Text("\(post.rating) #\(String(post.id)) ⬆️\(post.score.total) ❤️\(post.fav_count)")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(post.tags.artist.joined(separator: ", "))
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        HStack(spacing: 10) {
+                            Text("\(post.rating.uppercased()) · #\(post.id)")
                             Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up")
+                                Text("\(post.score.total)")
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill")
+                                Text("\(post.fav_count)")
+                            }
                         }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .padding(10.0)
-                    .background(Color.gray)
-                    .cornerRadius(10)
+                    .padding(12)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     RelatedPostsView(post: post, search: search)
                     InfoView(post: post, search: search)
                     .padding(10)
