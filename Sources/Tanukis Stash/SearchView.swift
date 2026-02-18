@@ -214,19 +214,20 @@ struct PostPreviewFrame: View {
                 }
                 VStack() {
                     Spacer()
-                    HStack(alignment: .bottom) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.up")
-                            Text(post.score.total.formatted(.number.notation(.compactName)))
-                            Image(systemName: "heart.fill")
-                                .padding(.leading, 2)
-                            Text(post.fav_count.formatted(.number.notation(.compactName)))
-                        }
-                        .font(.system(size: 12))
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.white)
-                        Spacer()
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.up")
+                        Text(post.score.total.formatted(.number.notation(.compactName)))
+                        Image(systemName: "heart.fill")
+                            .padding(.leading, 1)
+                        Text(post.fav_count.formatted(.number.notation(.compactName)))
+                        Image(systemName: "bubble.right")
+                            .padding(.leading, 1)
+                        Text(post.comment_count.formatted(.number.notation(.compactName)))
                     }
+                    .font(.system(size: 10))
+                    .fontWeight(.bold)
+                    .foregroundColor(Color.white)
+                    .frame(maxWidth: .infinity)
                     .padding(5.0)
                     .background(Color.gray.opacity(0.50))
                 }

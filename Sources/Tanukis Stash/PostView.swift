@@ -21,6 +21,7 @@ struct PostView: View {
     @State private var our_score: Int = 2;
     @State private var score_valid: Bool = false;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+    @State private var descExpanded: Bool = true;
 
     private var tapGesture: some Gesture {
         !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
@@ -36,37 +37,72 @@ struct PostView: View {
                             height: calculateImageHeight(geometry: geometry)
                         )
                         .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(post.tags.artist.joined(separator: ", "))
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        HStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text("\(post.rating.uppercased()) · #\(post.id)")
-                            Spacer()
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.up")
-                                Text("\(post.score.total)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 10) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.up")
+                                    Text("\(post.score.total)")
+                                }
+                                HStack(spacing: 4) {
+                                    Image(systemName: "heart.fill")
+                                    Text("\(post.fav_count)")
+                                }
+                                HStack(spacing: 4) {
+                                    Image(systemName: "bubble.right")
+                                    Text("\(post.comment_count)")
+                                }
                             }
-                            HStack(spacing: 4) {
-                                Image(systemName: "heart.fill")
-                                Text("\(post.fav_count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if !post.tags.artist.isEmpty {
+                            Menu {
+                                ForEach(post.tags.artist, id: \.self) { artist in
+                                    NavigationLink(destination: SearchView(search: artist)) {
+                                        Text(artist)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "paintpalette.fill")
+                                    Text(post.tags.artist.joined(separator: ", "))
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     }
                     .padding(12)
                     .background(.regularMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     RelatedPostsView(post: post, search: search)
-                    InfoView(post: post, search: search)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !post.description.isEmpty {
+                        DisclosureGroup(isExpanded: $descExpanded) {
+                            AttributedText(descParser(text: .init(post.description)))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } label: {
+                            Text("Description")
+                                .font(.title3)
+                                .fontWeight(.heavy)
+                                .foregroundColor(Color.primary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                     if post.comment_count > 0 {
                         CommentsView(post: post)
                             .padding(10)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    InfoView(post: post, search: search)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationBarTitle("Post", displayMode: .inline)
@@ -229,12 +265,7 @@ struct InfoView: View {
     @State var search: String;
 
     var body: some View {
-        if (!post.description.isEmpty) {
-            AttributedText(descParser(text: .init(post.description)))
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
         VStack(alignment: .leading) {
-            TagGroup(label: "Artist", tags: post.tags.artist, search: search, textColor: Color.yellow)
             TagGroup(label: "Character", tags: post.tags.character, search: search, textColor: Color.green)
             TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple)
             TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red)
