@@ -9,7 +9,7 @@ import SwiftUI
 import AlertToast
 import AttributedText
 
-@MainActor 
+@MainActor
 struct PostView: View {
     @State private var showImageViewer: Bool = false;
     @State var post: PostContent;
@@ -17,65 +17,98 @@ struct PostView: View {
     @State var url: String = "";
 
     @State private var displayToastType = 0;
+    @State private var favorited: Bool = false;
+    @State private var our_score: Int = 2;
+    @State private var score_valid: Bool = false;
+    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
 
     private var tapGesture: some Gesture {
         !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
     }
-    
+
     var body: some View {
-        GeometryReader {geometry in
-            ZStack(alignment: .bottom) {
-                ScrollView(.vertical) {
+        GeometryReader { geometry in
+            ScrollView(.vertical) {
+                VStack {
+                    MediaView(post: post, geometry: geometry).gesture(tapGesture)
+                        .frame(
+                            width: geometry.size.width,
+                            height: calculateImageHeight(geometry: geometry)
+                        )
+                        .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
                     VStack {
-                        MediaView(post: post, geometry: geometry).gesture(tapGesture)
-                            .frame(
-                                width: geometry.size.width,
-                                height: calculateImageHeight(geometry: geometry)
-                            )
-                            .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
-                        VStack {
-                            HStack {
-                                Text(post.tags.artist.joined(separator: ", "));
-                                Spacer();
-                            }
-                            HStack {
-                                Text("\(post.rating) #\(String(post.id)) ⬆️\(post.score.total) ❤️\(post.fav_count)")
-                                Spacer()
-                            }
+                        HStack {
+                            Text(post.tags.artist.joined(separator: ", "));
+                            Spacer();
                         }
-                        .padding(10.0)
-                        .background(Color.gray)
-                        .cornerRadius(10)
-                        RelatedPostsView(post: post, search: search)
-                        InfoView(post: post, search: search)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        HStack {
+                            Text("\(post.rating) #\(String(post.id)) ⬆️\(post.score.total) ❤️\(post.fav_count)")
+                            Spacer()
+                        }
+                    }
+                    .padding(10.0)
+                    .background(Color.gray)
+                    .cornerRadius(10)
+                    RelatedPostsView(post: post, search: search)
+                    InfoView(post: post, search: search)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationBarTitle("Post", displayMode: .inline)
+            .sheet(isPresented: $showImageViewer) {
+                FullscreenImageViewer(post: post)
+            }
+            .toolbar {
+                if AUTHENTICATED {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button {
+                            Task { favorited = favorited ? await unFavoritePost(postId: post.id) : await favoritePost(postId: post.id) }
+                        } label: {
+                            Image(systemName: favorited ? "heart.fill" : "heart")
+                                .imageScale(.large)
+                        }
+                    }
+                    ToolbarSpacer(.fixed, placement: .bottomBar)
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button {
+                            Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
+                        } label: {
+                            Image(systemName: our_score == 1 ? "arrowtriangle.up.fill" : "arrowtriangle.up")
+                                .imageScale(.large)
+                        }
+                        .disabled(!score_valid)
+                        Button {
+                            Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
+                        } label: {
+                            Image(systemName: our_score == -1 ? "arrowtriangle.down.fill" : "arrowtriangle.down")
+                                .imageScale(.large)
+                        }
+                        .disabled(!score_valid)
                     }
                 }
-                .navigationBarTitle("Post", displayMode: .inline)
-                .sheet(isPresented: $showImageViewer, content: {
-                                FullscreenImageViewer(post: post)
-                            })
-                .padding(EdgeInsets(top: 0, leading: 0, bottom: 30, trailing: 0))
-                ActionBar(post: post, search: search, displayToastType: $displayToastType)
-                    .frame(maxWidth: .infinity, maxHeight: 30)
+                ToolbarSpacer(.flexible, placement: .bottomBar)
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button {
+                        Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                            .imageScale(.large)
+                    }
+                    ShareLink(item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!) {
+                        Image(systemName: "square.and.arrow.up")
+                            .imageScale(.large)
+                    }
+                }
             }
             .toast(isPresenting: Binding<Bool>(get: { displayToastType != 0 }, set: { _ in })) {
                 getToast()
             }
-            /*.alert(isPresented: Binding<Bool>(get: { displayToastType == 3 }, set: { _ in })) {
-                Alert(
-                    title: Text("Permission Denied"),
-                    message: Text("You have denied access to the photo library. Please enable access in your settings if you want to use this feature."),
-                    dismissButton: .default(Text("OK")) {
-                        // Action to open the app settings
-                        if let settingsURL = URL(string: UIApplication.openSettingsURLString),
-                           UIApplication.shared.canOpenURL(settingsURL) {
-                            UIApplication.shared.open(settingsURL)
-                        }
-                    }
-                )
-            }*/
+            .onAppear { favorited = post.is_favorited }
+            .task {
+                await fetchCurrentPostLiked()
+                await fetchCurrentPostVote()
+            }
         }
     }
 
@@ -108,6 +141,23 @@ struct PostView: View {
             clearToast()
             return AlertToast(type: .regular, title: "FUck")
         }
+    }
+
+    func fetchCurrentPostLiked() async {
+        do {
+            let url = "/posts/\(post.id).json"
+            let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
+            if (data) == nil { return; }
+            let parsedData = try JSONDecoder().decode(Post.self, from: data!)
+            favorited = parsedData.post.is_favorited;
+        } catch {
+            print(error);
+        }
+    }
+
+    func fetchCurrentPostVote() async {
+        our_score = await getVote(postId: post.id);
+        score_valid = [-1,0,1].contains(our_score);
     }
 }
 
@@ -199,101 +249,6 @@ struct InfoView: View {
     }
 }
 
-struct ActionBar: View {
-    @State var post: PostContent;
-    @State var search: String;
-    @State var favorited: Bool = false;
-    @State var our_score: Int = 2;
-    @State var score_valid: Bool = false
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
-    @Binding var displayToastType: Int
-
-    var buttonSpacing = EdgeInsets(top: 10, leading: 0, bottom: 0, trailing: 5);
-    
-    var body: some View {
-        VStack {
-            HStack() {
-                Spacer().frame(width: 15)
-                if (AUTHENTICATED) {
-                    Button(action: {
-                        Task.init {
-                            favorited = favorited ? await unFavoritePost(postId: post.id) : await favoritePost(postId: post.id);
-                        }
-                    }) {
-                        Image(systemName: favorited ? "heart.fill" : "heart")
-                            .font(.title)
-                            .foregroundColor(.red)
-                            .padding(buttonSpacing)
-                    }.disabled(!AUTHENTICATED)
-                    Button(action: {
-                        Task.init {
-                            our_score = await votePost(postId: post.id, value: 1, no_unvote: false);
-                        }
-                    }) {
-                        Image(systemName: our_score == 1 ? "arrowtriangle.up.fill" : "arrowtriangle.up")
-                            .font(.title)
-                            .foregroundColor(!score_valid ? .gray : .green)
-                            .padding(buttonSpacing)
-                    }.disabled(!score_valid || !AUTHENTICATED)
-                    Button(action: {
-                        Task.init {
-                            our_score = await votePost(postId: post.id, value: -1, no_unvote: false);
-                        }
-                    }) {
-                        Image(systemName: our_score == -1 ? "arrowtriangle.down.fill" : "arrowtriangle.down")
-                            .font(.title)
-                            .foregroundColor(!score_valid ? .gray : .orange)
-                            .padding(buttonSpacing)
-                    }.disabled(!score_valid || !AUTHENTICATED)
-                }
-                Spacer()
-                Button(action: {
-                    Task.init {
-                        displayToastType = -1 // Show loading toast
-                        saveFile(post: post, showToast: $displayToastType);
-                    }
-                }) {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.title)
-                        .padding(buttonSpacing)
-                }
-                ShareLink(item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title)
-                        .padding(buttonSpacing)
-                }
-                Spacer().frame(width: 10)
-            }
-            .background(.ultraThinMaterial)
-            .onAppear() {
-                favorited = post.is_favorited
-            }
-            .task {
-                await fetchCurrentPostLiked();
-                await fetchCurrentPostVote();
-            }
-        }
-    }
-
-    func fetchCurrentPostLiked() async {
-        do {
-            let url = "/posts/\(post.id).json"
-            let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-            if (data) == nil { return; }
-            let parsedData = try JSONDecoder().decode(Post.self, from: data!)
-            favorited = parsedData.post.is_favorited;
-        } catch {
-            print(error);
-        }
-    }
-
-    func fetchCurrentPostVote() async {
-        our_score = await getVote(postId: post.id);
-        print(our_score)
-        score_valid = [-1,0,1].contains(our_score);
-        print(score_valid)
-    }
-}
 
 struct TagGroup: View {
     @State var label: String;
