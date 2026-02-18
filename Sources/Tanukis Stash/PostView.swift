@@ -62,6 +62,11 @@ struct PostView: View {
                     InfoView(post: post, search: search)
                     .padding(10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if post.comment_count > 0 {
+                        CommentsView(post: post)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
             }
             .navigationBarTitle("Post", displayMode: .inline)
@@ -313,6 +318,80 @@ struct Tag: View {
         //)
         .navigationDestination(isPresented: $isActive) {
             SearchView(search: String(tag))
+        }
+    }
+}
+
+struct CommentRow: View {
+    @State var comment: CommentContent;
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(comment.creator_name)
+                    .font(.subheadline)
+                    .fontWeight(.semibold);
+                Spacer();
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.up");
+                    Text("\(comment.score)");
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary);
+            }
+            Text(comment.created_at.prefix(10))
+                .font(.caption)
+                .foregroundStyle(.secondary);
+            AttributedText(descParser(text: comment.body))
+                .font(.body);
+        }
+    }
+}
+
+struct CommentsView: View {
+    @State var post: PostContent;
+    @State private var comments: [CommentContent] = [];
+    @State private var isLoading: Bool = false;
+    @State private var isExpanded: Bool = false;
+    @State private var hasFetched: Bool = false;
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8);
+                } else if comments.isEmpty {
+                    Text(hasFetched ? "No comments" : "")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading);
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(comments) { comment in
+                            CommentRow(comment: comment);
+                            if comment.id != comments.last?.id {
+                                Divider();
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading);
+                }
+            } label: {
+                Text("Comments (\(post.comment_count))")
+                    .font(.title3)
+                    .fontWeight(.heavy);
+            }
+            .onChange(of: isExpanded) {
+                if isExpanded && !hasFetched {
+                    hasFetched = true;
+                    Task {
+                        isLoading = true;
+                        comments = await fetchComments(postId: post.id);
+                        isLoading = false;
+                    }
+                }
+            }
         }
     }
 }

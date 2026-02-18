@@ -171,6 +171,18 @@ func getPost(postId: Int) async -> PostContent? {
     }
 }
 
+func fetchComments(postId: Int) async -> [CommentContent] {
+    let url = "/comments.json?group_by=comment&search%5Bpost_id%5D=\(postId)&limit=75";
+    do {
+        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return []; }
+        let comments = try JSONDecoder().decode([CommentContent].self, from: data);
+        return comments.filter { !$0.is_hidden };
+    } catch {
+        os_log("Error fetching comments for post %{public}d: %{public}s", log: .default, postId, error.localizedDescription);
+        return [];
+    }
+}
+
 func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostContent] {
     do {
         let username = UserDefaults.standard.string(forKey: "username") ?? "";
