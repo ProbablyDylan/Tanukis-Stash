@@ -9,8 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     
-    @Environment(\.presentationMode)
-    var presentationMode: Binding<PresentationMode>
+    @Environment(\.dismiss) private var dismiss
     @State private var username: String = UserDefaults.standard.string(forKey: "username") ?? "";
     @State private var selection: String = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net";
     @State private var API_KEY: String = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
@@ -23,7 +22,7 @@ struct SettingsView: View {
     let sources = ["e926.net", "e621.net"];
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Account")) {
                     if (AUTHENTICATED) {
@@ -109,10 +108,13 @@ struct SettingsView: View {
                     Link("Visit GitHub", destination: URL(string: "https://github.com/CaramelKat/Tanukis-Stash/releases/latest")!)
                 }
             }
-            .navigationBarTitle("Settings", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Dismiss", action: {
-                self.presentationMode.wrappedValue.dismiss()
-            }))
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Dismiss") { dismiss() }
+                }
+            }
             .onAppear {
                 Task {
                     await getUserIcon()
