@@ -176,7 +176,7 @@ func fetchComments(postId: Int) async -> [CommentContent] {
     do {
         guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return []; }
         let comments = try JSONDecoder().decode([CommentContent].self, from: data);
-        return comments.filter { !$0.is_hidden };
+        return comments.filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
     } catch {
         os_log("Error fetching comments for post %{public}d: %{public}s", log: .default, postId, error.localizedDescription);
         return [];

@@ -322,6 +322,85 @@ struct Tag: View {
     }
 }
 
+struct CommentBody: View {
+    let text: String;
+
+    private struct Segment: Identifiable {
+        let id: Int;
+        let isQuote: Bool;
+        let content: String;
+    }
+
+    private var segments: [Segment] {
+        var result: [Segment] = [];
+        var remaining = text;
+        var idx = 0;
+        while !remaining.isEmpty {
+            if let openRange = remaining.range(of: "[quote]") {
+                let before = String(remaining[remaining.startIndex..<openRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines);
+                if !before.isEmpty {
+                    result.append(Segment(id: idx, isQuote: false, content: before));
+                    idx += 1;
+                }
+                remaining = String(remaining[openRange.upperBound...]);
+                if let closeRange = remaining.range(of: "[/quote]") {
+                    let quoted = String(remaining[remaining.startIndex..<closeRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines);
+                    result.append(Segment(id: idx, isQuote: true, content: quoted));
+                    idx += 1;
+                    remaining = String(remaining[closeRange.upperBound...]);
+                } else {
+                    result.append(Segment(id: idx, isQuote: true, content: remaining.trimmingCharacters(in: .whitespacesAndNewlines)));
+                    remaining = "";
+                }
+            } else {
+                let trimmed = remaining.trimmingCharacters(in: .whitespacesAndNewlines);
+                if !trimmed.isEmpty {
+                    result.append(Segment(id: idx, isQuote: false, content: trimmed));
+                }
+                remaining = "";
+            }
+        }
+        return result;
+    }
+
+    private func parseAttribution(_ content: String) -> (attributor: String?, body: String) {
+        if let match = content.firstMatch(of: /^"([^"]+)":[^\s]+ said:\n?/) {
+            return (String(match.1), String(content[match.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines));
+        }
+        return (nil, content);
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(segments) { segment in
+                if segment.isQuote {
+                    let (attributor, quoteBody) = parseAttribution(segment.content);
+                    HStack(alignment: .top, spacing: 8) {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.4))
+                            .frame(width: 3);
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let name = attributor {
+                                Text("\(name) said:")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary);
+                            }
+                            AttributedText(descParser(text: quoteBody))
+                                .italic()
+                                .foregroundStyle(.secondary)
+                                .font(.body);
+                        }
+                    }
+                    .padding(.leading, 4);
+                } else {
+                    AttributedText(descParser(text: segment.content))
+                        .font(.body);
+                }
+            }
+        }
+    }
+}
+
 struct CommentRow: View {
     @State var comment: CommentContent;
 
@@ -342,8 +421,7 @@ struct CommentRow: View {
             Text(comment.created_at.prefix(10))
                 .font(.caption)
                 .foregroundStyle(.secondary);
-            AttributedText(descParser(text: comment.body))
-                .font(.body);
+            CommentBody(text: comment.body);
         }
     }
 }
