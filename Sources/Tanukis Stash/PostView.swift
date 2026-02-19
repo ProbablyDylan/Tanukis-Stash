@@ -127,6 +127,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
                                 .imageScale(.large)
+                                .symbolEffect(.bounce, value: favorited)
                         }
                     }
                     ToolbarSpacer(.fixed, placement: .bottomBar)
@@ -136,6 +137,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                                 .imageScale(.large)
+                                .symbolEffect(.bounce, value: our_score)
                         }
                         .disabled(!score_valid)
                         Button {
@@ -143,6 +145,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                                 .imageScale(.large)
+                                .symbolEffect(.bounce, value: our_score)
                         }
                         .disabled(!score_valid)
                     }
@@ -152,17 +155,24 @@ struct PostView: View {
                     Button {
                         Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
                     } label: {
-                        Image(systemName: "square.and.arrow.down")
+                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.down")
                             .imageScale(.large)
+                            .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                            .contentTransition(.symbolEffect(.replace))
+                            .symbolEffect(.pulse, isActive: displayToastType == -1)
                     }
+                    .disabled(displayToastType == -1)
                     ShareLink(item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!) {
                         Image(systemName: "square.and.arrow.up")
                             .imageScale(.large)
                     }
                 }
             }
-            .toast(isPresenting: Binding<Bool>(get: { displayToastType != 0 }, set: { _ in })) {
+            .toast(isPresenting: Binding<Bool>(get: { [1, 3, 4].contains(displayToastType) }, set: { _ in })) {
                 getToast()
+            }
+            .onChange(of: displayToastType) { _, newValue in
+                if newValue == 2 { clearToast() }
             }
             .onAppear { favorited = post.is_favorited }
             .task {
@@ -189,17 +199,18 @@ struct PostView: View {
 
     func getToast() -> AlertToast {
         switch displayToastType {
-        case 2:
-            clearToast()
-            return AlertToast(type: .complete(Color.green), title: "Saved!")
-        case -1:
-            return AlertToast(type: .loading, title: "Saving media...")
         case 1:
             clearToast()
-            return AlertToast(type: .error(Color.red), title: "Failed to save")
+            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to save")
+        case 3:
+            clearToast()
+            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Photos permission required")
+        case 4:
+            clearToast()
+            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to move file")
         default:
             clearToast()
-            return AlertToast(type: .regular, title: "FUck")
+            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Unknown error")
         }
     }
 
