@@ -81,6 +81,7 @@ struct PostView: View {
                     .background(.regularMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     RelatedPostsView(post: post, search: search)
+                        .padding(10)
                     if !post.description.isEmpty {
                         DisclosureGroup(isExpanded: $descExpanded) {
                             AttributedText(descParser(text: .init(post.description)))
@@ -214,48 +215,155 @@ struct PostView: View {
 struct RelatedPostsView: View {
     @State var post: PostContent;
     @State var search: String;
-    @State private var parentPost: PostContent?;
+
+    private let maxVisibleChildren = 10;
+
+    private var hasRelated: Bool {
+        post.relationships.parent_id != nil ||
+        !post.relationships.children.isEmpty ||
+        post.relationships.has_active_children ||
+        !post.pools.isEmpty
+    }
 
     var body: some View {
-        HStack {
-            if((post.relationships.parent_id) != nil) {
-                NavigationLink(destination: PostView(post: parentPost ?? post, search: search)) {
-                    Text("Parent")
-                        .foregroundColor(Color.red)
-                        .font(.headline)
-                }
-                .task {
-                    await fetchParentPostData(postID: post.relationships.parent_id!);
-                }
-                //Spacer()
-            }
-            if(post.relationships.has_active_children) {
-                NavigationLink(destination: SearchView(search: "parent:" + String(post.id))) {
-                    Text("Children")
-                        .foregroundColor(Color.red)
-                        .font(.headline)
-                }
-            }
-            if(post.pools.count > 0) {
-                //Spacer()
-                NavigationLink(destination: SearchView(search: "pool:" + String(post.pools[0]))) {
-                    Text("Pool")
-                        .foregroundColor(Color.green)
-                        .font(.headline)
+        if hasRelated {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Related")
+                    .font(.title3)
+                    .fontWeight(.heavy)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        if let parentId = post.relationships.parent_id {
+                            RelatedPostCard(postId: parentId, label: "Parent", search: search)
+                        }
+
+                        let children = post.relationships.children;
+                        if !children.isEmpty {
+                            ForEach(children.prefix(maxVisibleChildren), id: \.self) { childId in
+                                RelatedPostCard(postId: childId, label: "Child", search: search)
+                            }
+                            if children.count > maxVisibleChildren {
+                                NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
+                                    overflowCard(count: children.count)
+                                }
+                            }
+                        } else if post.relationships.has_active_children {
+                            NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
+                                overflowCard(count: nil)
+                            }
+                        }
+
+                        if let poolId = post.pools.first {
+                            PoolCard(poolId: poolId, search: search)
+                        }
+                    }
+                    .padding(.horizontal, 2)
                 }
             }
         }
     }
 
-    func fetchParentPostData(postID: Int) async {
-        do {
-            let url = "/posts/\(postID).json"
-            let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-            if (data) == nil { return; }
-            let parsedData = try JSONDecoder().decode(Post.self, from: data!)
-            parentPost = parsedData.post;
-        } catch {
-            print(error);
+    private func overflowCard(count: Int?) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: "ellipsis")
+                .font(.title2)
+                .frame(width: 80, height: 80)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Text(count.map { "View all \($0)" } ?? "Children")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+}
+
+struct RelatedPostCard: View {
+    let postId: Int;
+    let label: String;
+    let search: String;
+    @State private var fetchedPost: PostContent?;
+
+    var body: some View {
+        Group {
+            if let post = fetchedPost {
+                NavigationLink(destination: PostView(post: post, search: search)) {
+                    cardContent(for: post)
+                }
+            } else {
+                cardPlaceholder()
+            }
+        }
+        .task { fetchedPost = await getPost(postId: postId); }
+    }
+
+    private func cardContent(for post: PostContent) -> some View {
+        AsyncImage(url: URL(string: post.preview.url ?? "")) { phase in
+            if let img = phase.image { img.resizable().aspectRatio(contentMode: .fill) }
+            else { Color.secondary.opacity(0.15) }
+        }
+        .frame(width: 80, height: 80)
+        .clipped()
+        .overlay(alignment: .bottomLeading) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(.black.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .padding(4)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+    }
+
+    private func cardPlaceholder() -> some View {
+        ProgressView()
+            .frame(width: 80, height: 80)
+            .background(Color.secondary.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+    }
+}
+
+struct PoolCard: View {
+    let poolId: Int;
+    let search: String;
+    @State private var firstPost: PostContent?;
+
+    var body: some View {
+        NavigationLink(destination: SearchView(search: "pool:\(poolId)")) {
+            Group {
+                if let post = firstPost {
+                    AsyncImage(url: URL(string: post.preview.url ?? "")) { phase in
+                        if let img = phase.image { img.resizable().aspectRatio(contentMode: .fill) }
+                        else { Color.secondary.opacity(0.15) }
+                    }
+                    .frame(width: 80, height: 80)
+                    .clipped()
+                } else {
+                    ProgressView()
+                        .frame(width: 80, height: 80)
+                        .background(Color.secondary.opacity(0.1))
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                Text("Pool")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+        }
+        .task {
+            let posts = await fetchRecentPosts(1, 1, "pool:\(poolId)");
+            firstPost = posts.first;
         }
     }
 }
