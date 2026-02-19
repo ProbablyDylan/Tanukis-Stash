@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Kingfisher
 
 struct SearchView: View {
     @State var posts = [PostContent]();
@@ -47,7 +48,7 @@ struct SearchView: View {
                 ForEach(Array(posts.enumerated()), id: \.element) { i, post in
                     PostPreviewFrame(post: post, search: search)
                     .onAppear {
-                        if (i == posts.count - 9) {
+                        if (i == posts.count - 18) {
                             Task.init {
                                 await getPosts(append: true);
                             }
@@ -132,10 +133,13 @@ struct SearchView: View {
             page = 1;
             posts = await fetchRecentPosts(page, limit, search)
         }
-        
+
         if (posts.count == 0) {
             infoText = noPostsFoundText
         }
+
+        let prefetchURLs = posts.compactMap { URL(string: $0.preview.url ?? "") };
+        ImagePrefetcher(urls: prefetchURLs).start();
     }
     
     func updateSearch(_ tag: String) {
@@ -192,19 +196,18 @@ struct PostPreviewFrame: View {
         NavigationLink(destination: PostView(post: post, search: search)) {
             ZStack {
                 if(post.preview.url != nil) {
-                    AsyncImage(url: URL(string: post.preview.url!)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .clipped()
-                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .frame(height: 150)
-                            .shadow(color: Color.primary.opacity(0.3), radius: 1)
-                    } placeholder: {
-                        ProgressView()
-                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .frame(width: 100, height: 150)
-                    }
+                    KFImage(URL(string: post.preview.url!))
+                        .placeholder {
+                            ProgressView()
+                                .frame(minWidth: 0, maxWidth: .infinity)
+                                .frame(width: 100, height: 150)
+                        }
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        .frame(height: 150)
+                        .shadow(color: Color.primary.opacity(0.3), radius: 1)
                 }
                 else {
                     Text("Deleted")

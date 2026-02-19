@@ -4,6 +4,8 @@
 
 ### 2026-02-18 (later)
 
+- Replaced `AsyncImage` with Kingfisher's `KFImage` in the search grid for in-memory + disk thumbnail caching; added `ImagePrefetcher` to pre-warm the cache on each page load, eliminating thumbnail pop-in during scrolling
+
 - Cleared all entries from App.entitlements (temporary fix) — macOS-only sandbox entitlements (`app-sandbox`, `network.client`, `network.server`, `assets.pictures.read-write`, `photos-library`) caused iOS device signature verification to fail with 0xe8008015; iOS does not use these entitlements and they must be restored with platform-conditional handling before macOS builds can be re-enabled
 - Fixed MP4 posts always failing to save (were falling into unsupported else-branch)
 - Fixed GIFs saving as a static single frame — now saved as animated GIF using raw data + `com.compuserve.gif` UTI
