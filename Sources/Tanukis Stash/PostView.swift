@@ -40,7 +40,7 @@ struct PostView: View {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(post.rating.uppercased()) · #\(post.id)")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
                             HStack(spacing: 10) {
                                 HStack(spacing: 4) {
@@ -56,11 +56,20 @@ struct PostView: View {
                                     Text("\(post.comment_count)")
                                 }
                             }
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if !post.tags.artist.isEmpty {
+                        if post.tags.artist.count == 1 {
+                            NavigationLink(destination: SearchView(search: post.tags.artist[0])) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "paintpalette.fill")
+                                    Text(post.tags.artist[0])
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            }
+                        } else if post.tags.artist.count > 1 {
                             Menu {
                                 ForEach(post.tags.artist, id: \.self) { artist in
                                     NavigationLink(destination: SearchView(search: artist)) {
@@ -72,7 +81,7 @@ struct PostView: View {
                                     Image(systemName: "paintpalette.fill")
                                     Text(post.tags.artist.joined(separator: ", "))
                                 }
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
                             }
                         }
@@ -125,14 +134,14 @@ struct PostView: View {
                         Button {
                             Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
                         } label: {
-                            Image(systemName: our_score == 1 ? "arrowtriangle.up.fill" : "arrowtriangle.up")
+                            Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                                 .imageScale(.large)
                         }
                         .disabled(!score_valid)
                         Button {
                             Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
                         } label: {
-                            Image(systemName: our_score == -1 ? "arrowtriangle.down.fill" : "arrowtriangle.down")
+                            Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                                 .imageScale(.large)
                         }
                         .disabled(!score_valid)
