@@ -6,6 +6,8 @@ import SwiftUI
 private enum DownloadError: Error {
     case albumCreationFailed
     case assetCreationFailed
+    case noVideoURL
+    case moveError
 }
 
 func determineAuthorizationStatus() -> PHAuthorizationStatus {
@@ -80,21 +82,33 @@ func saveVideoToStashAlbum(url: URL) async throws {
 
     let (tempURL, _) = try await URLSession.shared.download(from: url);
 
+    // Ensure the destination has an explicit .mp4 extension so Photos recognises it.
     guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
         throw DownloadError.assetCreationFailed;
     }
-    let destinationURL = documentsDir.appendingPathComponent(url.lastPathComponent);
+    var filename = url.lastPathComponent;
+    if !filename.hasSuffix(".mp4") { filename += ".mp4"; }
+    let destinationURL = documentsDir.appendingPathComponent(filename);
 
-    if FileManager.default.fileExists(atPath: destinationURL.path) {
-        try FileManager.default.removeItem(at: destinationURL);
+    do {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL);
+        }
+        try FileManager.default.moveItem(at: tempURL, to: destinationURL);
+    } catch {
+        throw DownloadError.moveError;
     }
-    try FileManager.default.moveItem(at: tempURL, to: destinationURL);
     defer { try? FileManager.default.removeItem(at: destinationURL); }
 
     var placeholderID: String?;
     try await PHPhotoLibrary.shared().performChanges {
-        guard let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: destinationURL) else { return; }
-        guard let placeholder = request.placeholderForCreatedAsset else { return; }
+        let options = PHAssetResourceCreationOptions();
+        let request = PHAssetCreationRequest.forAsset();
+        request.addResource(with: .video, fileURL: destinationURL, options: options);
+        guard let placeholder = request.placeholderForCreatedAsset else {
+            os_log("%{public}s", log: .default, "saveVideoToStashAlbum: placeholderForCreatedAsset was nil");
+            return;
+        }
         placeholderID = placeholder.localIdentifier;
         PHAssetCollectionChangeRequest(for: album)?.addAssets([placeholder] as NSArray);
     }
@@ -144,7 +158,7 @@ func saveFile(post: PostContent, showToast: Binding<Int>) {
 
             case "webm", "mp4":
                 guard let videoURL = getVideoLink(post: post) else {
-                    throw DownloadError.assetCreationFailed;
+                    throw DownloadError.noVideoURL;
                 }
                 try await saveVideoToStashAlbum(url: videoURL);
 
@@ -158,6 +172,11 @@ func saveFile(post: PostContent, showToast: Binding<Int>) {
 
             await MainActor.run { showToast.wrappedValue = 2; }
 
+        } catch DownloadError.noVideoURL {
+            await MainActor.run { showToast.wrappedValue = 5; }
+        } catch DownloadError.moveError {
+            os_log("%{public}s", log: .default, "saveFile: failed to move downloaded file to documents directory");
+            await MainActor.run { showToast.wrappedValue = 4; }
         } catch {
             os_log("%{public}s", log: .default, "saveFile error: \(String(describing: error))");
             await MainActor.run { showToast.wrappedValue = 1; }

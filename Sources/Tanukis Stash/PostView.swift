@@ -169,7 +169,7 @@ struct PostView: View {
                     }
                 }
             }
-            .toast(isPresenting: Binding<Bool>(get: { [1, 3, 4].contains(displayToastType) }, set: { _ in })) {
+            .toast(isPresenting: Binding<Bool>(get: { [1, 3, 4, 5].contains(displayToastType) }, set: { _ in })) {
                 getToast()
             }
             .onChange(of: displayToastType) { _, newValue in
@@ -209,6 +209,9 @@ struct PostView: View {
         case 4:
             clearToast()
             return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to move file")
+        case 5:
+            clearToast()
+            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "No video available")
         default:
             clearToast()
             return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Unknown error")
