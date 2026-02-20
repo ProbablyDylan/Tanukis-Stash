@@ -8,6 +8,7 @@
 import SwiftUI
 import AlertToast
 import AttributedText
+import Kingfisher
 
 @MainActor
 struct PostView: View {
@@ -274,7 +275,7 @@ struct RelatedPostsView: View {
                         }
 
                         if let poolId = post.pools.first {
-                            PoolCard(poolId: poolId, search: search)
+                            PoolCard(poolId: poolId)
                         }
                     }
                     .padding(.horizontal, 2)
@@ -318,10 +319,9 @@ struct RelatedPostCard: View {
     }
 
     private func cardContent(for post: PostContent) -> some View {
-        AsyncImage(url: URL(string: post.preview.url ?? "")) { phase in
-            if let img = phase.image { img.resizable().aspectRatio(contentMode: .fill) }
-            else { Color.secondary.opacity(0.15) }
-        }
+        KFImage(URL(string: post.preview.url ?? ""))
+            .resizable()
+            .aspectRatio(contentMode: .fill)
         .frame(width: 80, height: 80)
         .clipped()
         .overlay(alignment: .bottomLeading) {
@@ -349,19 +349,22 @@ struct RelatedPostCard: View {
 
 struct PoolCard: View {
     let poolId: Int;
-    let search: String;
+    @State private var pool: PoolContent?;
     @State private var firstPost: PostContent?;
 
+    private var displayName: String {
+        pool?.name.replacingOccurrences(of: "_", with: " ") ?? "Pool";
+    }
+
     var body: some View {
-        NavigationLink(destination: SearchView(search: "pool:\(poolId)")) {
+        NavigationLink(destination: PoolView(poolId: poolId)) {
             Group {
                 if let post = firstPost {
-                    AsyncImage(url: URL(string: post.preview.url ?? "")) { phase in
-                        if let img = phase.image { img.resizable().aspectRatio(contentMode: .fill) }
-                        else { Color.secondary.opacity(0.15) }
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipped()
+                    KFImage(URL(string: post.preview.url ?? ""))
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 80, height: 80)
+                        .clipped()
                 } else {
                     ProgressView()
                         .frame(width: 80, height: 80)
@@ -369,9 +372,11 @@ struct PoolCard: View {
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                Text("Pool")
+                Text(displayName)
                     .font(.caption2)
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(.black.opacity(0.5))
@@ -382,8 +387,10 @@ struct PoolCard: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
         }
         .task {
-            let posts = await fetchRecentPosts(1, 1, "pool:\(poolId)");
-            firstPost = posts.first;
+            async let poolFetch = fetchPool(poolId: poolId);
+            async let postFetch = fetchRecentPosts(1, 1, "pool:\(poolId) order:id");
+            pool = await poolFetch;
+            firstPost = await postFetch.first;
         }
     }
 }
@@ -617,7 +624,8 @@ struct CommentsView: View {
             } label: {
                 Text("Comments (\(post.comment_count))")
                     .font(.title3)
-                    .fontWeight(.heavy);
+                    .fontWeight(.heavy)
+                    .foregroundColor(Color.primary);
             }
             .onChange(of: isExpanded) {
                 if isExpanded && !hasFetched {

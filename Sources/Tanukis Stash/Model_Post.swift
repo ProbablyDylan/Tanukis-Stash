@@ -120,3 +120,17 @@ struct VoteResponse: Decodable, Hashable {
     let message: String?;
     let code: String?;
 }
+
+struct PoolContent: Decodable {
+    let id: Int;
+    let name: String;
+    let description: String;
+    let category: String;
+    let post_ids: [Int];
+    let post_count: Int;
+    let creator_name: String;
+    let created_at: String;
+    let updated_at: String;
+    let is_active: Bool;
+    let is_deleted: Bool;
+}

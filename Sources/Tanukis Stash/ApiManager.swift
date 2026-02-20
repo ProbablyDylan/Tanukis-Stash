@@ -171,6 +171,19 @@ func getPost(postId: Int) async -> PostContent? {
     }
 }
 
+func fetchPool(poolId: Int) async -> PoolContent? {
+    let url = "/pools/\(poolId).json";
+    do {
+        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
+        if (data) == nil { return nil; }
+        let pool = try JSONDecoder().decode(PoolContent.self, from: data!);
+        return pool;
+    } catch {
+        os_log("Error fetching pool %{public}d: %{public}s", log: .default, poolId, error.localizedDescription);
+        return nil;
+    }
+}
+
 func fetchComments(postId: Int) async -> [CommentContent] {
     let url = "/comments.json?group_by=comment&search%5Bpost_id%5D=\(postId)&limit=75";
     do {
