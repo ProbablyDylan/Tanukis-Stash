@@ -45,7 +45,7 @@ struct SearchView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             LazyVGrid(columns: vGridLayout) {
-                ForEach(Array(posts.enumerated()), id: \.element) { i, post in
+                ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
                     PostPreviewFrame(post: post, search: search)
                     .onAppear {
                         if (i == posts.count - 18) {
@@ -126,19 +126,22 @@ struct SearchView: View {
     
     func getPosts(append: Bool) async {
         infoText = loadingText;
+        let newPosts: [PostContent];
         if(append) {
             page += 1;
-            posts += await fetchRecentPosts(page, limit, search)
+            newPosts = await fetchRecentPosts(page, limit, search);
+            posts += newPosts;
         } else {
             page = 1;
-            posts = await fetchRecentPosts(page, limit, search)
+            newPosts = await fetchRecentPosts(page, limit, search);
+            posts = newPosts;
         }
 
         if (posts.count == 0) {
             infoText = noPostsFoundText
         }
 
-        let prefetchURLs = posts.compactMap { URL(string: $0.preview.url ?? "") };
+        let prefetchURLs = newPosts.compactMap { URL(string: $0.preview.url ?? "") };
         ImagePrefetcher(urls: prefetchURLs).start();
     }
     
@@ -188,8 +191,8 @@ struct SearchableViewPassthrough: ViewModifier {
 }
 
 struct PostPreviewFrame: View {
-    @State var post: PostContent;
-    @State var search: String;
+    let post: PostContent;
+    let search: String;
     
     var body: some View {
         

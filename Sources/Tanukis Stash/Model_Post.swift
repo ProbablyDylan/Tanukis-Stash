@@ -12,6 +12,10 @@ struct PostContent: Decodable, Hashable {
     static func == (lhs: PostContent, rhs: PostContent) -> Bool {
         return lhs.id == rhs.id
     }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id);
+    }
     
     let id: Int;
     let created_at: String;
