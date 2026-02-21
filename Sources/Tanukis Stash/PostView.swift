@@ -9,6 +9,7 @@ import SwiftUI
 import AlertToast
 import AttributedText
 import Kingfisher
+import os.log
 
 @MainActor
 struct PostView: View {
@@ -23,6 +24,9 @@ struct PostView: View {
     @State private var score_valid: Bool = false;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
     @State private var descExpanded: Bool = true;
+    @State private var shareItems: [Any] = [];
+    @State private var showShareSheet = false;
+    @State private var preparingShare = false;
 
     private var tapGesture: some Gesture {
         !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
@@ -120,6 +124,9 @@ struct PostView: View {
             .sheet(isPresented: $showImageViewer) {
                 FullscreenImageViewer(post: post)
             }
+            .sheet(isPresented: $showShareSheet) {
+                ActivityView(activityItems: shareItems)
+            }
             .toolbar {
                 if AUTHENTICATED {
                     ToolbarItemGroup(placement: .bottomBar) {
@@ -153,20 +160,29 @@ struct PostView: View {
                 }
                 ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button {
-                        Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                    Menu {
+                        Button {
+                            Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                        } label: {
+                            Label("Save to Photos", systemImage: "square.and.arrow.down")
+                        }
+                        ShareLink(
+                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!,
+                            label: { Label("Share Link", systemImage: "link") }
+                        )
+                        Button {
+                            prepareAndShareContent()
+                        } label: {
+                            Label("Share Content", systemImage: "photo")
+                        }
                     } label: {
-                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.down")
+                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
                             .imageScale(.large)
                             .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
                             .contentTransition(.symbolEffect(.replace))
-                            .symbolEffect(.pulse, isActive: displayToastType == -1)
+                            .symbolEffect(.pulse, isActive: displayToastType == -1 || preparingShare)
                     }
-                    .disabled(displayToastType == -1)
-                    ShareLink(item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!) {
-                        Image(systemName: "square.and.arrow.up")
-                            .imageScale(.large)
-                    }
+                    .disabled(displayToastType == -1 || preparingShare)
                 }
             }
             .toast(isPresenting: Binding<Bool>(get: { [1, 3, 4, 5].contains(displayToastType) }, set: { _ in })) {
@@ -233,6 +249,50 @@ struct PostView: View {
     func fetchCurrentPostVote() async {
         our_score = await getVote(postId: post.id);
         score_valid = [-1,0,1].contains(our_score);
+    }
+
+    func prepareAndShareContent() {
+        preparingShare = true;
+        Task {
+            do {
+                let tempURL = try await downloadToTemp(post: post);
+                await MainActor.run {
+                    shareItems = [tempURL];
+                    showShareSheet = true;
+                    preparingShare = false;
+                }
+            } catch {
+                os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))");
+                await MainActor.run { preparingShare = false; displayToastType = 1; }
+            }
+        }
+    }
+
+    func downloadToTemp(post: PostContent) async throws -> URL {
+        let ext = post.file.ext;
+        let downloadURL: URL;
+
+        if ext == "webm" || ext == "mp4" {
+            guard let url = getVideoLink(post: post) else { throw URLError(.fileDoesNotExist); }
+            downloadURL = url;
+        } else {
+            guard let urlString = post.file.url, let url = URL(string: urlString) else {
+                throw URLError(.badURL);
+            }
+            downloadURL = url;
+        }
+
+        let destExt = ext == "webm" ? "mp4" : ext;
+        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(post.id).\(destExt)");
+
+        if !FileManager.default.fileExists(atPath: destURL.path) {
+            let (downloadedURL, _) = try await URLSession.shared.download(from: downloadURL);
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                try FileManager.default.removeItem(at: destURL);
+            }
+            try FileManager.default.moveItem(at: downloadedURL, to: destURL);
+        }
+        return destURL;
     }
 }
 
@@ -642,6 +702,14 @@ struct CommentsView: View {
             }
         }
     }
+}
+
+struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any];
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil);
+    }
+    func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
 }
 
 func descParser(text: String)-> String {
