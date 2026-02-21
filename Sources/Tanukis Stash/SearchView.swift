@@ -96,13 +96,11 @@ struct SearchView: View {
         }
         .textInputAutocapitalization(.never)
         .onChange(of: search) {
-            Task.init { 
-                if(search.count >= 3) {
-                    Task.init {
-                        searchSuggestions = await createTagList(search);
-                    }
-                } 
-           }
+            if(search.count >= 3) {
+                Task.init {
+                    searchSuggestions = await createTagList(search);
+                }
+            }
         }
         .onSubmit(of: .search) {
             posts = [];

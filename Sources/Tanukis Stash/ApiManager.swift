@@ -39,11 +39,11 @@ func login() async -> Bool {
 }
 
 func areTagsBlacklisted(blacklistedArray: [String], postTags: [String]) -> Bool {
+    let postTagsSet = Set(postTags.map { $0.lowercased() });
     for tag in blacklistedArray {
          // Each line in the blacklist can contain multiple tags separated by spaces, if post contains all of them, it is blacklisted
         let blacklistLineTags = tag.split(separator: " ").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
         let blacklistLineTagsSet = Set(blacklistLineTags)
-        let postTagsSet = Set(postTags.map { $0.lowercased() })
         // Check if the post tags contain all the blacklisted tags in this line
         if blacklistLineTagsSet.isSubset(of: postTagsSet) {
             os_log("Post is blacklisted due to tags: %{public}s", log: .default, tag);
@@ -54,20 +54,14 @@ func areTagsBlacklisted(blacklistedArray: [String], postTags: [String]) -> Bool 
 
 }
 
-func isPostBlacklisted(_ post: PostContent) async -> Bool {
-    let blacklistedTags = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
-    if (blacklistedTags == "No Auth" || blacklistedTags == "Bad usrdata") {
-        return false;
-    }
-    // Split the blacklisted tags into an array
-    let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool {
     var allPostTags = post.tags.general
 
-    allPostTags.append(contentsOf: post.tags.species) 
-    allPostTags.append(contentsOf: post.tags.character) 
-    allPostTags.append(contentsOf: post.tags.copyright) 
-    allPostTags.append(contentsOf: post.tags.artist) 
-    allPostTags.append(contentsOf: post.tags.invalid) 
+    allPostTags.append(contentsOf: post.tags.species)
+    allPostTags.append(contentsOf: post.tags.character)
+    allPostTags.append(contentsOf: post.tags.copyright)
+    allPostTags.append(contentsOf: post.tags.artist)
+    allPostTags.append(contentsOf: post.tags.invalid)
     allPostTags.append(contentsOf: post.tags.lore)
     allPostTags.append(contentsOf: post.tags.meta)
 
@@ -123,19 +117,11 @@ func fetchTags(_ text: String) async -> [String] {
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
         if (data) == nil { return []; }
         let tags: [TagContent] = try JSONDecoder().decode([TagContent].self, from: data!)
-        return await processTags(tags);
+        return tags.map { $0.name };
     } catch {
         //os_log("%{public}s", log: .default, error);
         return [];
     }
-}
-
-func processTags(_ tags: [TagContent]) async  -> [String] {
-    var tagList = [String]();
-    for tag in tags {
-        tagList.append(tag.name);
-    }
-    return tagList
 }
 
 func parseSearch(_ searchText: String) -> String {
@@ -219,13 +205,12 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
 
         // If the blacklist is enabled, filter out blacklisted posts
         if (UserDefaults.standard.bool(forKey: "ENABLE_BLACKLIST")) {
-            var filteredPosts = [PostContent]()
-            for post in parsedData.posts {
-                if !(await isPostBlacklisted(post)) {
-                    filteredPosts.append(post)
-                }
+            let blacklistedTags = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
+            guard blacklistedTags != "No Auth" && blacklistedTags != "Bad usrdata" else {
+                return parsedData.posts;
             }
-            return filteredPosts
+            let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) };
+            return parsedData.posts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) }
         }
 
         return parsedData.posts;

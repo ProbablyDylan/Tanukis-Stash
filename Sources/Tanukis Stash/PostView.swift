@@ -14,8 +14,8 @@ import os.log
 @MainActor
 struct PostView: View {
     @State private var showImageViewer: Bool = false;
-    @State var post: PostContent;
-    @State var search: String;
+    let post: PostContent;
+    let search: String;
     @State var url: String = "";
 
     @State private var displayToastType = 0;
@@ -297,8 +297,8 @@ struct PostView: View {
 }
 
 struct RelatedPostsView: View {
-    @State var post: PostContent;
-    @State var search: String;
+    let post: PostContent;
+    let search: String;
 
     private let maxVisibleChildren = 10;
 
@@ -459,8 +459,8 @@ struct PoolCard: View {
 }
 
 struct InfoView: View {
-    @State var post: PostContent;
-    @State var search: String;
+    let post: PostContent;
+    let search: String;
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -494,10 +494,10 @@ struct InfoView: View {
 
 
 struct TagGroup: View {
-    @State var label: String;
-    @State var tags: [String];
-    @State var search: String;
-    @State var textColor: Color;
+    let label: String;
+    let tags: [String];
+    let search: String;
+    let textColor: Color;
     
     var body: some View {
         if tags.isEmpty {
@@ -521,9 +521,9 @@ struct TagGroup: View {
 }
 
 struct Tag: View {
-    @State var tag: String
-    @State var search: String
-    @State var textColor: Color;
+    let tag: String
+    let search: String
+    let textColor: Color;
     @State var isActive: Bool = false
     
     var body: some View {
@@ -560,7 +560,10 @@ struct CommentBody: View {
         let content: String;
     }
 
-    private var segments: [Segment] {
+    private let segments: [Segment];
+
+    init(text: String) {
+        self.text = text;
         var result: [Segment] = [];
         var remaining = text;
         var idx = 0;
@@ -589,7 +592,7 @@ struct CommentBody: View {
                 remaining = "";
             }
         }
-        return result;
+        self.segments = result;
     }
 
     private func parseAttribution(_ content: String) -> (attributor: String?, body: String) {
@@ -631,7 +634,7 @@ struct CommentBody: View {
 }
 
 struct CommentRow: View {
-    @State var comment: CommentContent;
+    let comment: CommentContent;
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -656,7 +659,7 @@ struct CommentRow: View {
 }
 
 struct CommentsView: View {
-    @State var post: PostContent;
+    let post: PostContent;
     @State private var comments: [CommentContent] = [];
     @State private var isLoading: Bool = false;
     @State private var isExpanded: Bool = false;
