@@ -15,12 +15,8 @@ struct SearchView: View {
     @State var page = 1;
     @State var showSettings = false;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
-    @Environment(\.dismiss) private var dismiss;
     @Environment(\.dismissSearch) private var dismissSearch;
     
-    let fuckSearchableViewModel = SearchableViewModel();
-    var isTopView: Bool = false
-
     @State var infoText: String = ""
 
     var limit = 75;
@@ -33,9 +29,8 @@ struct SearchView: View {
     var loadingText = "Loading posts...";
     var noPostsFoundText = "No posts found";
 
-    init(search: String, isTopView: Bool = false) {
+    init(search: String) {
         self.search = search;
-        self.isTopView = isTopView; 
     }
     
     var body: some View {
@@ -63,38 +58,41 @@ struct SearchView: View {
                 await getPosts(append: false);
             }
         })
-        .toolbar {
-            if (AUTHENTICATED) {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: SearchView(search: String("fav:\(UserDefaults.standard.string(forKey: "username") ?? "default")"))) {
-                        Image(systemName: "heart").imageScale(.large)
-                    }
-                }
-            }
-            if (isTopView) {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        self.showSettings = true
-                    }) {
-                        Image(systemName: "person.crop.circle").imageScale(.large)
-                    }
-                }
-            }
-        }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("Posts")
-        .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search for tags") {
-            //List {
-                ForEach(searchSuggestions, id: \.self) { tag in
-                    Button(action: {
-                        updateSearch(tag);
-                    }) {
-                        Text(tag);
+        .searchable(text: $search, prompt: "Search for tags") {
+            ForEach(searchSuggestions, id: \.self) { tag in
+                Button(action: {
+                    updateSearch(tag);
+                }) {
+                    Text(tag);
+                }
+            }
+        }
+        #if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .bottomBar) {
+                Button("Settings", systemImage: "person.crop.circle") {
+                    showSettings = true;
+                }
+            }
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            if (AUTHENTICATED) {
+                ToolbarItem(placement: .bottomBar) {
+                    NavigationLink(destination: SearchView(search: "fav:\(UserDefaults.standard.string(forKey: "username") ?? "")")) {
+                        Label("Favorites", systemImage: "heart")
                     }
                 }
-            //}
+            }
         }
-        .textInputAutocapitalization(.never)
+        #endif
+        .sheet(isPresented: $showSettings, onDismiss: {
+            AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+        }) {
+            SettingsView()
+        }
         .onChange(of: search) {
             if(search.count >= 3) {
                 Task.init {
@@ -110,12 +108,6 @@ struct SearchView: View {
                 dismissSearch()
             }
         }
-        .onChange(of: showSettings) {
-            updateSettings();
-        }
-        .sheet(isPresented: $showSettings, content: {
-            SettingsView()
-        })
         .refreshable {
             page = 1;
             posts = await fetchRecentPosts(page, limit, search)
@@ -153,22 +145,6 @@ struct SearchView: View {
         else { search = tag; }
     }
     
-    func updateSettings() {
-        showSettings = !showSettings;
-        AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
-        
-        if(showSettings) {
-            if(posts.count == 0) {
-                posts = [];
-                Task.init {
-                    await getPosts(append: false);
-                    searchSuggestions.removeAll();
-                    dismiss()
-                    dismissSearch()
-                }
-            }
-        }
-    }
 }
 
 class SearchableViewModel: ObservableObject {

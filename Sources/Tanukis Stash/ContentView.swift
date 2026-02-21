@@ -21,7 +21,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            SearchView(search: "", isTopView: true)
+            SearchView(search: "")
         }
     }
 }
