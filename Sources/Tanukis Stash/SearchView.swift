@@ -16,7 +16,8 @@ struct SearchView: View {
     @State var showSettings = false;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
     @Environment(\.dismissSearch) private var dismissSearch;
-    
+    @State private var activeSearch: String;
+
     @State var infoText: String = ""
 
     var limit = 75;
@@ -31,9 +32,10 @@ struct SearchView: View {
 
     init(search: String) {
         self.search = search;
+        self.activeSearch = search;
     }
     
-    var body: some View {
+    var postGrid: some View {
         ScrollView(.vertical) {
             if(posts.count == 0) {
                 ProgressView(infoText)
@@ -58,8 +60,16 @@ struct SearchView: View {
                 await getPosts(append: false);
             }
         })
+        .refreshable {
+            page = 1;
+            posts = await fetchRecentPosts(page, limit, search)
+        }
+    }
+
+    var body: some View {
+        postGrid
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("Posts")
+        .navigationTitle(activeSearch.isEmpty ? "Recent" : "Results")
         .searchable(text: $search, prompt: "Search for tags") {
             ForEach(searchSuggestions, id: \.self) { tag in
                 Button(action: {
@@ -72,7 +82,7 @@ struct SearchView: View {
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
-                Button("Settings", systemImage: "person.crop.circle") {
+                Button("Settings", systemImage: "gearshape") {
                     showSettings = true;
                 }
             }
@@ -94,23 +104,26 @@ struct SearchView: View {
             SettingsView()
         }
         .onChange(of: search) {
-            if(search.count >= 3) {
+            if search.isEmpty && !activeSearch.isEmpty {
+                activeSearch = "";
+                posts = [];
+                Task {
+                    await getPosts(append: false);
+                }
+            } else if(search.count >= 3) {
                 Task.init {
                     searchSuggestions = await createTagList(search);
                 }
             }
         }
         .onSubmit(of: .search) {
+            activeSearch = search;
             posts = [];
             Task.init {
                 await getPosts(append: false);
                 searchSuggestions.removeAll();
                 dismissSearch()
             }
-        }
-        .refreshable {
-            page = 1;
-            posts = await fetchRecentPosts(page, limit, search)
         }
     }
     
