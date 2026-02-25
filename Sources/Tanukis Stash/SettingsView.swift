@@ -180,7 +180,7 @@ struct SettingsView: View {
                         Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
                             .foregroundColor(.secondary)
                     }
-                    Link("Visit GitHub", destination: URL(string: "https://github.com/ProbablyDylan/Tanukis-Stash/releases/latest")!)
+                    Link("Development Telegram", destination: URL(string: "https://t.me/+RCLG75mgaG80YWI5")!)
                 }
             }
             .navigationTitle("Settings")
