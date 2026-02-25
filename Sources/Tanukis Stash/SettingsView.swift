@@ -18,6 +18,11 @@ struct SettingsView: View {
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
     @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: "USER_ICON") ?? "";
+    @State private var blacklistEntries: [String] = [];
+    @State private var newBlacklistTag: String = "";
+    @State private var tagSuggestions: [String] = [];
+    @State private var isSavingBlacklist: Bool = false;
+    @State private var blacklistSaveSuccess: Bool? = nil;
 
     let sources = ["e926.net", "e621.net"];
     
@@ -61,17 +66,87 @@ struct SettingsView: View {
 
                 if (AUTHENTICATED) {
                     Section(header: Text("Blacklist")) {
-                            TextField("Blacklist", text: $BLACKLIST,  axis: .vertical)
-                                .disabled(true)
-                                .foregroundStyle(.gray)
-                                .onAppear {
-                                    Task {
-                                        BLACKLIST = await fetchBlacklist();
-                                        UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                        ForEach(Array(blacklistEntries.enumerated()), id: \.offset) { index, entry in
+                            Text(entry)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        blacklistEntries.remove(at: index);
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
                                     }
                                 }
-                            Link("Edit User Settings", destination: URL(string: "https://\(selection)/users/\(username)/edit?tab=blacklist")!)
                         }
+                        HStack {
+                            TextField("Add tag...", text: $newBlacklistTag)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .onChange(of: newBlacklistTag) {
+                                    Task {
+                                        if newBlacklistTag.count >= 3 {
+                                            tagSuggestions = await createTagList(newBlacklistTag);
+                                        } else {
+                                            tagSuggestions = [];
+                                        }
+                                    }
+                                }
+                                .onSubmit {
+                                    addBlacklistEntry();
+                                }
+                            Button(action: {
+                                addBlacklistEntry();
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(.accentColor)
+                            }
+                            .disabled(newBlacklistTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        if !tagSuggestions.isEmpty {
+                            ForEach(tagSuggestions, id: \.self) { tag in
+                                Button(action: {
+                                    newBlacklistTag = tag;
+                                    tagSuggestions = [];
+                                }) {
+                                    Text(tag)
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+                        }
+                        Button(action: {
+                            isSavingBlacklist = true;
+                            blacklistSaveSuccess = nil;
+                            Task {
+                                let tags = blacklistEntries.joined(separator: "\n");
+                                let success = await updateBlacklist(tags: tags);
+                                if success {
+                                    BLACKLIST = tags;
+                                    UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                                }
+                                isSavingBlacklist = false;
+                                blacklistSaveSuccess = success;
+                                try? await Task.sleep(nanoseconds: 2_000_000_000);
+                                blacklistSaveSuccess = nil;
+                            }
+                        }) {
+                            HStack {
+                                Text("Save Blacklist")
+                                Spacer()
+                                if isSavingBlacklist || blacklistSaveSuccess != nil {
+                                    Image(systemName: isSavingBlacklist ? "ellipsis.circle.fill" : (blacklistSaveSuccess == true ? "checkmark.circle.fill" : "xmark.circle.fill"))
+                                        .symbolEffect(.pulse, isActive: isSavingBlacklist)
+                                        .contentTransition(.symbolEffect(.replace))
+                                        .foregroundColor(isSavingBlacklist ? .secondary : (blacklistSaveSuccess == true ? .green : .red))
+                                }
+                            }
+                        }
+                        .disabled(isSavingBlacklist)
+                    }
+                    .onAppear {
+                        Task {
+                            BLACKLIST = await fetchBlacklist();
+                            UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                            blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                        }
+                    }
                 }
 
                 Section(header: Text("App Settings")) {
@@ -125,7 +200,17 @@ struct SettingsView: View {
             .refreshable {
                 BLACKLIST = await fetchBlacklist();
                 UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
             }
+        }
+    }
+
+    func addBlacklistEntry() {
+        let tag = newBlacklistTag.trimmingCharacters(in: .whitespacesAndNewlines);
+        if !tag.isEmpty {
+            blacklistEntries.append(tag);
+            newBlacklistTag = "";
+            tagSuggestions = [];
         }
     }
 

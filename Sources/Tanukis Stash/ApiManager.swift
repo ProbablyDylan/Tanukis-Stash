@@ -109,6 +109,16 @@ func fetchBlacklist() async -> String {
     return data;
 }
 
+func updateBlacklist(tags: String) async -> Bool {
+    guard let userData = await fetchUserData() else { return false; }
+    let url = "/users/\(userData.id).json";
+    let encoded = tags.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "";
+    let body = "user[blacklisted_tags]=\(encoded)".data(using: .utf8);
+    let data = await makeRequest(destination: url, method: "PATCH", body: body, contentType: "application/x-www-form-urlencoded");
+    if data == nil { return false; }
+    return true;
+}
+
 func fetchTags(_ text: String) async -> [String] {
     do {
         let encoded: String? = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
