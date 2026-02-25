@@ -131,8 +131,8 @@ struct SettingsView: View {
 
     func getUserIcon() async {
         guard let userData = await fetchUserData() else { return }
-        let avatarPostId: Int? = userData.avatar_id
-        guard let post = await getPost(postId: avatarPostId!) else { return }
+        guard let avatarPostId = userData.avatar_id else { return }
+        guard let post = await getPost(postId: avatarPostId) else { return }
         if ["gif", "webm", "mp4"].contains(post.file.ext) {
             // If the avatar is a video or gif, use the preview image instead
             USER_ICON = post.preview.url!

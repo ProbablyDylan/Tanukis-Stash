@@ -105,7 +105,7 @@ func fetchBlacklist() async -> String {
         os_log("Failed to fetch user data", log: .default);
         return "Bad usrdata";
     }
-    let data = userdata!.blacklisted_tags;
+    let data = userdata!.blacklisted_tags ?? "";
     return data;
 }
 
