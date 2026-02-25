@@ -213,17 +213,19 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
 
         let parsedData: Posts = try JSONDecoder().decode(Posts.self, from: data!)
 
+        var filteredPosts = parsedData.posts.filter { $0.preview.url != nil };
+
         // If the blacklist is enabled, filter out blacklisted posts
         if (UserDefaults.standard.bool(forKey: "ENABLE_BLACKLIST")) {
             let blacklistedTags = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
             guard blacklistedTags != "No Auth" && blacklistedTags != "Bad usrdata" else {
-                return parsedData.posts;
+                return filteredPosts;
             }
             let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) };
-            return parsedData.posts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) }
+            filteredPosts = filteredPosts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) };
         }
 
-        return parsedData.posts;
+        return filteredPosts;
     } catch {
         os_log("Error! %{public}@", log: .default, String(describing: error));
         return [];
