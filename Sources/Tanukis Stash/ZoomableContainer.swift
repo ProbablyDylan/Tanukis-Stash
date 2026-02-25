@@ -1,6 +1,6 @@
 //
 //  ZoomableContainer.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 //  Created by Jemma Poffinbarger on 12/19/24.
 //  Thanks https://stackoverflow.com/a/76649224!

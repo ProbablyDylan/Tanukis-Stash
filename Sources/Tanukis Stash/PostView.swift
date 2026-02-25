@@ -1,6 +1,6 @@
 //
 //  PostView.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 //  Created by Jemma Poffinbarger on 1/4/22.
 //

@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 //  Created by Jemma Poffinbarger on 1/7/22.
 //
@@ -105,7 +105,7 @@ struct SettingsView: View {
                         Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
                             .foregroundColor(.secondary)
                     }
-                    Link("Visit GitHub", destination: URL(string: "https://github.com/CaramelKat/Tanukis-Stash/releases/latest")!)
+                    Link("Visit GitHub", destination: URL(string: "https://github.com/ProbablyDylan/Tanukis-Stash/releases/latest")!)
                 }
             }
             .navigationTitle("Settings")

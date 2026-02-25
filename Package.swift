@@ -3,14 +3,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Tanuki's Stash",
+    name: "Tanuki",
     platforms: [
         .iOS(.v26),
         .macOS(.v26),
     ],
     products: [
         .library(
-            name: "The Tanuki's Stash",
+            name: "Tanuki",
             targets: ["Tanukis Stash"]
         ),
     ],

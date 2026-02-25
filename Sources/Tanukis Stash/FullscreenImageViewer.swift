@@ -1,6 +1,6 @@
 //
 //  FullscreenImageViewer.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 //  Created by Max on 12/19/24.
 //

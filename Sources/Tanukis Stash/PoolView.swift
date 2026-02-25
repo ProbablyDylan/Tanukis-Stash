@@ -1,6 +1,6 @@
 //
 //  PoolView.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 
 import SwiftUI

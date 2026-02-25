@@ -1,6 +1,6 @@
 //
 //  TagManager.swift
-//  Tanuki's Stash
+//  Tanuki
 //
 //  Created by Jemma Poffinbarger on 7/15/22.
 //
