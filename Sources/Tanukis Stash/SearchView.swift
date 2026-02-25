@@ -91,7 +91,7 @@ struct SearchView: View {
             ToolbarSpacer(.flexible, placement: .bottomBar)
             if (AUTHENTICATED) {
                 ToolbarItem(placement: .bottomBar) {
-                    NavigationLink(destination: SearchView(search: "fav:\(UserDefaults.standard.string(forKey: "username") ?? "")")) {
+                    NavigationLink(destination: FavoritesView()) {
                         Label("Favorites", systemImage: "heart")
                     }
                 }
