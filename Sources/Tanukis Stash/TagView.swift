@@ -13,6 +13,7 @@ struct TagView: View {
     @State private var tagDetail: TagDetail?;
     @State private var aliases = [TagAlias]();
     @State private var relatedTags = [String]();
+    @State private var tagCategories = [String: Int]();
     @State private var posts = [PostContent]();
     @State private var page = 1;
     @State private var isLoading: Bool = false;
@@ -52,7 +53,7 @@ struct TagView: View {
                             NavigationLink(destination: TagView(tagName: alias.antecedent_name)) {
                                 Text(alias.antecedent_name.replacingOccurrences(of: "_", with: " "))
                                     .font(.body)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(tagCategoryColor(tagCategories[alias.antecedent_name] ?? 0))
                                     .multilineTextAlignment(.leading)
                             }
                         }
@@ -74,7 +75,7 @@ struct TagView: View {
                             NavigationLink(destination: TagView(tagName: tag)) {
                                 Text(tag.replacingOccurrences(of: "_", with: " "))
                                     .font(.body)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(tagCategoryColor(tagCategories[tag] ?? 0))
                                     .multilineTextAlignment(.leading)
                             }
                         }
@@ -119,6 +120,11 @@ struct TagView: View {
             tagDetail = detail;
             relatedTags = parseRelatedTags(detail?.related_tags);
             aliases = await aliasesFetch;
+
+            let allNames = relatedTags + aliases.map { $0.antecedent_name };
+            if !allNames.isEmpty {
+                tagCategories = await fetchTagCategories(names: allNames);
+            }
 
             if posts.count == 0 {
                 await loadPosts();

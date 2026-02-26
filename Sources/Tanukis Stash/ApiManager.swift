@@ -328,6 +328,33 @@ func parseRelatedTags(_ relatedTags: String?) -> [String] {
     return names;
 }
 
+func tagCategoryColor(_ category: Int) -> Color {
+    switch category {
+    case 1: return .orange;
+    case 3: return .purple;
+    case 4: return .green;
+    case 5: return .red;
+    default: return .blue;
+    }
+}
+
+func fetchTagCategories(names: [String]) async -> [String: Int] {
+    guard !names.isEmpty else { return [:]; }
+    let joined = names.joined(separator: ",");
+    let encoded = joined.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? joined;
+    let url = "/tags.json?search%5Bname%5D=\(encoded)&limit=\(names.count)";
+    do {
+        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return [:]; }
+        let tags = try JSONDecoder().decode([TagDetail].self, from: data);
+        var map = [String: Int]();
+        for tag in tags { map[tag.name] = tag.category; }
+        return map;
+    } catch {
+        os_log("Error fetching tag categories: %{public}s", log: .default, error.localizedDescription);
+        return [:];
+    }
+}
+
 func makeRequest(destination: String, method: String, body: Data?, contentType: String) async -> Data? {
     let domain = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net";
     let API_KEY = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
