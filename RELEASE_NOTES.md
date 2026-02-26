@@ -1,5 +1,3 @@
-# Changelog
-
 ## v0.5 — "The Fork" (2025-02-25)
 
 The first release under ProbablyDylan's fork. Picks up from the original CaramelKat/Tanukis-Stash codebase (last upstream feature: collapsible tag categories and vote persistence) and applies a ground-up modernization.
