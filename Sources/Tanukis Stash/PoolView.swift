@@ -36,6 +36,18 @@ struct PoolView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            if let pool = pool, !pool.description.isEmpty {
+                DisclosureGroup {
+                    DTextView(text: pool.description)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    Text("Description")
+                        .font(.title3)
+                        .fontWeight(.heavy)
+                        .foregroundColor(Color.primary)
+                }
+                .padding(10)
+            }
             LazyVGrid(columns: vGridLayout) {
                 ForEach(Array(posts.enumerated()), id: \.element) { i, post in
                     PostPreviewFrame(post: post, search: poolTag)

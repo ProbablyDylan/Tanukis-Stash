@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AlertToast
-import AttributedText
 import Kingfisher
 import os.log
 
@@ -98,7 +97,7 @@ struct PostView: View {
                         .padding(10)
                     if !post.description.isEmpty {
                         DisclosureGroup(isExpanded: $descExpanded) {
-                            AttributedText(descParser(text: .init(post.description)))
+                            DTextView(text: post.description)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } label: {
                             Text("Description")
@@ -551,87 +550,6 @@ struct Tag: View {
     }
 }
 
-struct CommentBody: View {
-    let text: String;
-
-    private struct Segment: Identifiable {
-        let id: Int;
-        let isQuote: Bool;
-        let content: String;
-    }
-
-    private let segments: [Segment];
-
-    init(text: String) {
-        self.text = text;
-        var result: [Segment] = [];
-        var remaining = text;
-        var idx = 0;
-        while !remaining.isEmpty {
-            if let openRange = remaining.range(of: "[quote]") {
-                let before = String(remaining[remaining.startIndex..<openRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines);
-                if !before.isEmpty {
-                    result.append(Segment(id: idx, isQuote: false, content: before));
-                    idx += 1;
-                }
-                remaining = String(remaining[openRange.upperBound...]);
-                if let closeRange = remaining.range(of: "[/quote]") {
-                    let quoted = String(remaining[remaining.startIndex..<closeRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines);
-                    result.append(Segment(id: idx, isQuote: true, content: quoted));
-                    idx += 1;
-                    remaining = String(remaining[closeRange.upperBound...]);
-                } else {
-                    result.append(Segment(id: idx, isQuote: true, content: remaining.trimmingCharacters(in: .whitespacesAndNewlines)));
-                    remaining = "";
-                }
-            } else {
-                let trimmed = remaining.trimmingCharacters(in: .whitespacesAndNewlines);
-                if !trimmed.isEmpty {
-                    result.append(Segment(id: idx, isQuote: false, content: trimmed));
-                }
-                remaining = "";
-            }
-        }
-        self.segments = result;
-    }
-
-    private func parseAttribution(_ content: String) -> (attributor: String?, body: String) {
-        if let match = content.firstMatch(of: /^"([^"]+)":[^\s]+ said:\n?/) {
-            return (String(match.1), String(content[match.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines));
-        }
-        return (nil, content);
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(segments) { segment in
-                if segment.isQuote {
-                    let (attributor, quoteBody) = parseAttribution(segment.content);
-                    HStack(alignment: .top, spacing: 8) {
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.4))
-                            .frame(width: 3);
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let name = attributor {
-                                Text("\(name) said:")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary);
-                            }
-                            AttributedText(descParser(text: quoteBody))
-                                .italic()
-                                .foregroundStyle(.secondary)
-                                .font(.body);
-                        }
-                    }
-                    .padding(.leading, 4);
-                } else {
-                    AttributedText(descParser(text: segment.content))
-                        .font(.body);
-                }
-            }
-        }
-    }
-}
 
 struct CommentRow: View {
     let comment: CommentContent;
@@ -653,7 +571,7 @@ struct CommentRow: View {
             Text(comment.created_at.prefix(10))
                 .font(.caption)
                 .foregroundStyle(.secondary);
-            CommentBody(text: comment.body);
+            DTextView(text: comment.body)
         }
     }
 }
@@ -715,12 +633,3 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
 }
 
-func descParser(text: String)-> String {
-    var newText = text.replacingOccurrences(of: "[b]", with: "<b>");
-    newText = newText.replacingOccurrences(of: "[/b]", with: "</b>");
-    newText = newText.replacingOccurrences(of: "[u]", with: "<u>");
-    newText = newText.replacingOccurrences(of: "[/u]", with: "</u>");
-    newText = newText.replacingOccurrences(of: "[quote]", with: "\"");
-    newText = newText.replacingOccurrences(of: "[/quote]", with: "\"");
-    return newText;
-}
