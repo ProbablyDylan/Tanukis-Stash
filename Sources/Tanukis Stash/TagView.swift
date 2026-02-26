@@ -118,7 +118,7 @@ struct TagView: View {
             wiki = await wikiFetch;
             let detail = await detailFetch;
             tagDetail = detail;
-            relatedTags = parseRelatedTags(detail?.related_tags);
+            relatedTags = parseRelatedTags(detail?.related_tags).filter { $0 != tagName };
             aliases = await aliasesFetch;
 
             let allNames = relatedTags + aliases.map { $0.antecedent_name };
@@ -131,7 +131,16 @@ struct TagView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(displayName)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack {
+                    Text(displayName).font(.headline);
+                    if let count = tagDetail?.post_count {
+                        Text("\(count) posts").font(.caption).foregroundStyle(.secondary);
+                    }
+                }
+            }
+        }
         .refreshable {
             page = 1;
             async let wikiFetch = fetchWikiPage(tagName: tagName);

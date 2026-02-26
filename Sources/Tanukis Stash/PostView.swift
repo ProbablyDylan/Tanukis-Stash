@@ -467,6 +467,8 @@ struct InfoView: View {
             TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple)
             TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red)
             TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue)
+            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.orange)
+            TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray)
             if (!post.sources.isEmpty) {
                 DisclosureGroup {
                     VStack(alignment: .leading) {
