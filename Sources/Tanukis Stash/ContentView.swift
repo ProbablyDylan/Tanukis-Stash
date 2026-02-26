@@ -11,9 +11,11 @@ struct ContentView: View {
     @State private var navigateToPost: PostContent?
     @State private var navigateToPoolId: Int?
     @State private var navigateToSearch: String?
+    @State private var navigateToTag: String?
     @State private var showPostView = false
     @State private var showPoolView = false
     @State private var showSearchView = false
+    @State private var showTagView = false
     @State private var loadingPostId: Int?
 
     init() {
@@ -42,6 +44,11 @@ struct ContentView: View {
                 .navigationDestination(isPresented: $showSearchView) {
                     if let search = navigateToSearch {
                         SearchView(search: search)
+                    }
+                }
+                .navigationDestination(isPresented: $showTagView) {
+                    if let tag = navigateToTag {
+                        TagView(tagName: tag)
                     }
                 }
         }
@@ -75,8 +82,8 @@ struct ContentView: View {
 
             case "wiki":
                 if let tag = url.pathComponents.last?.removingPercentEncoding {
-                    navigateToSearch = tag
-                    showSearchView = true
+                    navigateToTag = tag
+                    showTagView = true
                 }
                 return .handled
 

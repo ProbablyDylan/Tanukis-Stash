@@ -65,7 +65,7 @@ struct PostView: View {
                         }
                         Spacer()
                         if post.tags.artist.count == 1 {
-                            NavigationLink(destination: SearchView(search: post.tags.artist[0])) {
+                            NavigationLink(destination: TagView(tagName: post.tags.artist[0])) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "paintpalette.fill")
                                     Text(post.tags.artist[0])
@@ -76,7 +76,7 @@ struct PostView: View {
                         } else if post.tags.artist.count > 1 {
                             Menu {
                                 ForEach(post.tags.artist, id: \.self) { artist in
-                                    NavigationLink(destination: SearchView(search: artist)) {
+                                    NavigationLink(destination: TagView(tagName: artist)) {
                                         Text(artist)
                                     }
                                 }
@@ -527,8 +527,8 @@ struct Tag: View {
     
     var body: some View {
         Menu {
-            NavigationLink(destination: SearchView(search: String(tag))) {
-                Text("New Search")
+            NavigationLink(destination: TagView(tagName: String(tag))) {
+                Text("View Tag")
             }
             NavigationLink(destination: SearchView(search: String(search + " " + tag))) {
                 Text("Add to Current Search")
@@ -541,11 +541,8 @@ struct Tag: View {
         } primaryAction: {
             isActive.toggle()
         }
-        //.background(
-        //    NavigationLink(destination: SearchView(search: String(tag)), isActive: $isActive) {}
-        //)
         .navigationDestination(isPresented: $isActive) {
-            SearchView(search: String(tag))
+            TagView(tagName: String(tag))
         }
     }
 }

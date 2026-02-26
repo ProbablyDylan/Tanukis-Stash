@@ -277,6 +277,57 @@ func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
     }
 }
 
+func fetchWikiPage(tagName: String) async -> WikiPage? {
+    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tagName;
+    let url = "/wiki_pages/\(encoded).json";
+    do {
+        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return nil; }
+        let wiki = try JSONDecoder().decode(WikiPage.self, from: data);
+        return wiki;
+    } catch {
+        os_log("Error fetching wiki page for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
+        return nil;
+    }
+}
+
+func fetchTagDetail(tagName: String) async -> TagDetail? {
+    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
+    let url = "/tags.json?search%5Bname_matches%5D=\(encoded)";
+    do {
+        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return nil; }
+        let tags = try JSONDecoder().decode([TagDetail].self, from: data);
+        return tags.first;
+    } catch {
+        os_log("Error fetching tag detail for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
+        return nil;
+    }
+}
+
+func fetchTagAliases(tagName: String) async -> [TagAlias] {
+    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
+    let url = "/tag_aliases.json?search%5Bconsequent_name%5D=\(encoded)&search%5Bstatus%5D=active";
+    do {
+        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return []; }
+        let aliases = try JSONDecoder().decode([TagAlias].self, from: data);
+        return aliases;
+    } catch {
+        os_log("Error fetching tag aliases for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
+        return [];
+    }
+}
+
+func parseRelatedTags(_ relatedTags: String?) -> [String] {
+    guard let raw = relatedTags, !raw.isEmpty else { return []; }
+    let parts = raw.split(separator: " ");
+    var names = [String]();
+    for (i, part) in parts.enumerated() {
+        if i % 2 == 0 {
+            names.append(String(part));
+        }
+    }
+    return names;
+}
+
 func makeRequest(destination: String, method: String, body: Data?, contentType: String) async -> Data? {
     let domain = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net";
     let API_KEY = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
