@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyGif
 import Kingfisher
 
 struct MediaView: View {
@@ -60,8 +59,7 @@ struct GIFView: View {
     @State var post: PostContent;
 
     var body: some View {
-        let url = URL(string: post.file.url!)!
-        AnimatedGifView(url: Binding(get: { url }, set: { _ in }))
+        AnimatedGifView(url: URL(string: post.file.url!)!)
     }
 }
 

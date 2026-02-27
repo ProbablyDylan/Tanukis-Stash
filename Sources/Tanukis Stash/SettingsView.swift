@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Kingfisher
 
 struct SettingsView: View {
     
@@ -32,20 +33,19 @@ struct SettingsView: View {
                 Section(header: Text("Account")) {
                     if (AUTHENTICATED) {
                         HStack {
-                            AsyncImage(url: URL(string: USER_ICON)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .clipped()
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(Circle())
-                            } placeholder: {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(Circle())
-                            }
+                            KFImage(URL(string: USER_ICON))
+                                .placeholder {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(Circle())
+                                }
+                                .resizable()
+                                .scaledToFill()
+                                .clipped()
+                                .frame(width: 50, height: 50)
+                                .clipShape(Circle())
                             Text(username.isEmpty ? "Username" : username)
                                 .font(.headline)
                                 .foregroundColor(.primary)

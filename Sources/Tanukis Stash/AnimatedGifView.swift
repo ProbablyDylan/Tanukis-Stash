@@ -1,21 +1,15 @@
 import SwiftUI
+import Kingfisher
 
-struct AnimatedGifView: UIViewRepresentable {
-    @Binding var url: URL
+struct AnimatedGifView: View {
+    var url: URL;
 
-    func makeUIView(context: Context) -> UIImageView {
-        let imageView = UIImageView(gifURL: self.url)
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        
-        imageView.setContentHuggingPriority(.defaultLow, for: .vertical)
-        imageView.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return imageView
-    }
-
-    func updateUIView(_ uiView: UIImageView, context: Context) {
-        uiView.setGifFromURL(self.url)
+    var body: some View {
+        KFAnimatedImage(url)
+            .placeholder {
+                ProgressView()
+            }
+            .fade(duration: 0.25)
+            .scaledToFit()
     }
 }

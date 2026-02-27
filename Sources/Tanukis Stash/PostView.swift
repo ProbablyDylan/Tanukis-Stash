@@ -419,7 +419,7 @@ struct PoolCard: View {
     }
 
     var body: some View {
-        NavigationLink(destination: PoolView(poolId: poolId, pool: pool, initialPosts: firstPost.map { [$0] } ?? [])) {
+        NavigationLink(destination: PoolView(poolId: poolId, pool: pool)) {
             Group {
                 if let post = firstPost {
                     KFImage(URL(string: post.preview.url ?? ""))
@@ -449,6 +449,7 @@ struct PoolCard: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
         }
         .task {
+            guard pool == nil || firstPost == nil else { return };
             async let poolFetch = fetchPool(poolId: poolId);
             async let postFetch = fetchRecentPosts(1, 1, "pool:\(poolId) order:id");
             pool = await poolFetch;

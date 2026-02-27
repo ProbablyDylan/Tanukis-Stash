@@ -40,6 +40,7 @@ struct PoolView: View {
     @State private var preparingShare = false
 
     @State private var AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED")
+    @Namespace private var gridTransition
 
     private let limit = 75
     private let gridColumns = [
@@ -64,13 +65,15 @@ struct PoolView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ZStack(alignment: .bottom) {
-                    if showGrid {
-                        gridView
-                    } else {
-                        carouselView
-                    }
+                    carouselView
+                        .opacity(showGrid ? 0 : 1)
+                        .zIndex(showGrid ? 0 : 1)
+                    gridView
+                        .opacity(showGrid ? 1 : 0)
+                        .zIndex(showGrid ? 1 : 0)
                     if !showGrid {
                         positionIndicator
+                            .zIndex(2)
                     }
                 }
             }
@@ -141,6 +144,7 @@ struct PoolView: View {
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
                     MediaView(post: post, geometry: geometry)
+                        .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: !showGrid)
                         .gesture(
                             !["webm", "mp4"].contains(String(post.file.ext))
                             ? TapGesture().onEnded { showImageViewer = true }
@@ -213,11 +217,6 @@ struct PoolView: View {
                 }
             }
         }
-        .onAppear {
-            if index >= posts.count - 5 && !allLoaded && !isLoading {
-                Task { await loadMorePosts() }
-            }
-        }
     }
 
     @ViewBuilder
@@ -255,31 +254,19 @@ struct PoolView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 if let pool = pool, !pool.description.isEmpty {
-                    DisclosureGroup {
-                        DTextView(text: pool.description)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } label: {
-                        Text("Description")
-                            .font(.title3)
-                            .fontWeight(.heavy)
-                            .foregroundColor(Color.primary)
-                    }
-                    .padding(10)
+                    DTextView(text: pool.description)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
                 }
                 LazyVGrid(columns: gridColumns) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                         Button {
                             currentIndex = index
-                            withAnimation { showGrid = false }
+                            withAnimation(.easeInOut(duration: 0.25)) { showGrid = false }
                         } label: {
                             gridCell(post: post, isSelected: index == currentIndex)
                         }
                         .id(index)
-                        .onAppear {
-                            if index >= posts.count - 18 && !allLoaded && !isLoading {
-                                Task { await loadMorePosts() }
-                            }
-                        }
                     }
                 }
                 .padding(10)
@@ -338,6 +325,7 @@ struct PoolView: View {
                 .background(Color.gray.opacity(0.50))
             }
         }
+        .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: showGrid)
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
@@ -371,80 +359,80 @@ struct PoolView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if AUTHENTICATED {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { showGrid.toggle() }
+            } label: {
+                Image(systemName: showGrid ? "square.stack" : "square.grid.2x2")
+            }
+        }
+        if !showGrid {
+            if AUTHENTICATED {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button {
+                        guard let post = currentPost else { return }
+                        Task {
+                            favorited = favorited
+                                ? await unFavoritePost(postId: post.id)
+                                : await favoritePost(postId: post.id)
+                        }
+                    } label: {
+                        Image(systemName: favorited ? "heart.fill" : "heart")
+                            .imageScale(.large)
+                            .symbolEffect(.bounce, value: favorited)
+                    }
+                }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button {
+                        guard let post = currentPost else { return }
+                        Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
+                    } label: {
+                        Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
+                            .imageScale(.large)
+                            .symbolEffect(.bounce, value: our_score)
+                    }
+                    .disabled(!score_valid)
+                    Button {
+                        guard let post = currentPost else { return }
+                        Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
+                    } label: {
+                        Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
+                            .imageScale(.large)
+                            .symbolEffect(.bounce, value: our_score)
+                    }
+                    .disabled(!score_valid)
+                }
+            }
+            ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItemGroup(placement: .bottomBar) {
-                Button {
-                    guard let post = currentPost else { return }
-                    Task {
-                        favorited = favorited
-                            ? await unFavoritePost(postId: post.id)
-                            : await favoritePost(postId: post.id)
+                Menu {
+                    Button {
+                        guard let post = currentPost else { return }
+                        Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                    } label: {
+                        Label("Save to Photos", systemImage: "square.and.arrow.down")
+                    }
+                    if let post = currentPost {
+                        ShareLink(
+                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!,
+                            label: { Label("Share Link", systemImage: "link") }
+                        )
+                    }
+                    Button {
+                        prepareAndShareContent()
+                    } label: {
+                        Label("Share Content", systemImage: "photo")
                     }
                 } label: {
-                    Image(systemName: favorited ? "heart.fill" : "heart")
+                    Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
                         .imageScale(.large)
-                        .symbolEffect(.bounce, value: favorited)
+                        .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.pulse, isActive: displayToastType == -1 || preparingShare)
                 }
+                .disabled(displayToastType == -1 || preparingShare)
             }
-            ToolbarSpacer(.fixed, placement: .bottomBar)
-            ToolbarItemGroup(placement: .bottomBar) {
-                Button {
-                    guard let post = currentPost else { return }
-                    Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
-                } label: {
-                    Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
-                        .imageScale(.large)
-                        .symbolEffect(.bounce, value: our_score)
-                }
-                .disabled(!score_valid)
-                Button {
-                    guard let post = currentPost else { return }
-                    Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
-                } label: {
-                    Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
-                        .imageScale(.large)
-                        .symbolEffect(.bounce, value: our_score)
-                }
-                .disabled(!score_valid)
-            }
-        }
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItemGroup(placement: .bottomBar) {
-            Button {
-                withAnimation { showGrid.toggle() }
-            } label: {
-                Image(systemName: showGrid ? "rectangle.fill" : "square.grid.2x2")
-                    .imageScale(.large)
-            }
-        }
-        ToolbarSpacer(.fixed, placement: .bottomBar)
-        ToolbarItemGroup(placement: .bottomBar) {
-            Menu {
-                Button {
-                    guard let post = currentPost else { return }
-                    Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
-                } label: {
-                    Label("Save to Photos", systemImage: "square.and.arrow.down")
-                }
-                if let post = currentPost {
-                    ShareLink(
-                        item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!,
-                        label: { Label("Share Link", systemImage: "link") }
-                    )
-                }
-                Button {
-                    prepareAndShareContent()
-                } label: {
-                    Label("Share Content", systemImage: "photo")
-                }
-            } label: {
-                Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
-                    .imageScale(.large)
-                    .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .symbolEffect(.pulse, isActive: displayToastType == -1 || preparingShare)
-            }
-            .disabled(displayToastType == -1 || preparingShare)
         }
     }
 
@@ -470,18 +458,21 @@ struct PoolView: View {
             favorited = first.is_favorited;
         }
         await fetchCurrentPostVote();
+        await loadRemainingPosts();
     }
 
-    private func loadMorePosts() async {
-        guard !isLoading && !allLoaded else { return }
-        isLoading = true
-        page += 1
-        let newPosts = await fetchRecentPosts(page, limit, poolTag)
-        posts += newPosts
-        if newPosts.count < limit { allLoaded = true }
-        isLoading = false
-        let urls = newPosts.compactMap { URL(string: $0.preview.url ?? "") }
-        ImagePrefetcher(urls: urls).start()
+    private func loadRemainingPosts() async {
+        while !allLoaded {
+            page += 1;
+            let fetched = await fetchRecentPosts(page, limit, poolTag);
+            if fetched.isEmpty { allLoaded = true; break; }
+            let existingIds = Set(posts.map { $0.id });
+            let newPosts = fetched.filter { !existingIds.contains($0.id) };
+            posts += newPosts;
+            if fetched.count < limit { allLoaded = true; }
+            let urls = newPosts.compactMap { URL(string: $0.preview.url ?? "") };
+            ImagePrefetcher(urls: urls).start();
+        }
     }
 
     private func prefetchThumbnails() {
