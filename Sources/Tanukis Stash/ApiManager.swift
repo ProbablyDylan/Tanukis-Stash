@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 import os.log
 
-let userAgent: String = "Tanukis%20Stash/0.0.5%20(by%20JemTanuki%20on%20e621)";
+let userAgent: String = "Tanukis%20Stash/1.0.0%20(by%20ProbablyOllie%20on%20e621)";
 let log = OSLog.init(subsystem: "dev.jemsoftware.tanukistash", category: "main")
 
 // Thanks Stackoverflow: https://stackoverflow.com/a/45624666
