@@ -124,19 +124,13 @@ struct PoolView: View {
     // MARK: - Carousel
 
     private var carouselView: some View {
-        Group {
-            if posts.count <= 1 && isLoading, let post = posts.first {
-                poolPostPage(post: post, index: 0)
-            } else {
-                TabView(selection: $currentIndex) {
-                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                        poolPostPage(post: post, index: index)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+        TabView(selection: $currentIndex) {
+            ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                poolPostPage(post: post, index: index)
+                    .tag(index)
             }
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
     }
 
     private func poolPostPage(post: PostContent, index: Int) -> some View {
@@ -441,38 +435,32 @@ struct PoolView: View {
     private func loadPosts() async {
         isLoading = true;
         infoText = "Loading pool...";
-        page = 1;
-        let fetched = await fetchRecentPosts(page, limit, poolTag);
-        if fetched.isEmpty && posts.isEmpty {
+        var allPosts: [PostContent] = [];
+        var currentPage = 1;
+
+        while true {
+            let fetched = await fetchRecentPosts(currentPage, limit, poolTag);
+            if fetched.isEmpty { break; }
+            let existingIds = Set(allPosts.map { $0.id });
+            allPosts += fetched.filter { !existingIds.contains($0.id) };
+            if fetched.count < limit { break; }
+            currentPage += 1;
+        }
+
+        if allPosts.isEmpty {
             infoText = "No posts found";
             isLoading = false;
             return;
         }
-        let existingIds = Set(posts.map { $0.id });
-        let newPosts = fetched.filter { !existingIds.contains($0.id) };
-        posts += newPosts;
-        allLoaded = fetched.count < limit;
+
+        posts = allPosts;
+        allLoaded = true;
         isLoading = false;
         prefetchThumbnails();
         if let first = posts.first {
             favorited = first.is_favorited;
         }
         await fetchCurrentPostVote();
-        await loadRemainingPosts();
-    }
-
-    private func loadRemainingPosts() async {
-        while !allLoaded {
-            page += 1;
-            let fetched = await fetchRecentPosts(page, limit, poolTag);
-            if fetched.isEmpty { allLoaded = true; break; }
-            let existingIds = Set(posts.map { $0.id });
-            let newPosts = fetched.filter { !existingIds.contains($0.id) };
-            posts += newPosts;
-            if fetched.count < limit { allLoaded = true; }
-            let urls = newPosts.compactMap { URL(string: $0.preview.url ?? "") };
-            ImagePrefetcher(urls: urls).start();
-        }
     }
 
     private func prefetchThumbnails() {

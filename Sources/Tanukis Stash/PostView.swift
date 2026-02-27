@@ -300,6 +300,7 @@ struct RelatedPostsView: View {
     let search: String;
 
     private let maxVisibleChildren = 10;
+    @State private var activeChildren: [PostContent]?;
 
     private var hasRelated: Bool {
         post.relationships.parent_id != nil ||
@@ -320,28 +321,40 @@ struct RelatedPostsView: View {
                             RelatedPostCard(postId: parentId, label: "Parent", search: search)
                         }
 
-                        let children = post.relationships.children;
-                        if !children.isEmpty {
-                            ForEach(children.prefix(maxVisibleChildren), id: \.self) { childId in
-                                RelatedPostCard(postId: childId, label: "Child", search: search)
+                        if let children = activeChildren {
+                            ForEach(children.prefix(maxVisibleChildren), id: \.id) { child in
+                                NavigationLink(destination: PostView(post: child, search: search)) {
+                                    RelatedPostCardContent(post: child, label: "Child")
+                                }
                             }
                             if children.count > maxVisibleChildren {
                                 NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
                                     overflowCard(count: children.count)
                                 }
                             }
-                        } else if post.relationships.has_active_children {
+                        } else if !post.relationships.children.isEmpty || post.relationships.has_active_children {
                             NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
-                                overflowCard(count: nil)
+                                overflowCard(count: post.relationships.children.isEmpty ? nil : post.relationships.children.count)
                             }
                         }
 
-                        if let poolId = post.pools.first {
+                        ForEach(post.pools, id: \.self) { poolId in
                             PoolCard(poolId: poolId)
                         }
                     }
                     .padding(.horizontal, 2)
                 }
+            }
+            .task(id: post.id) {
+                let childIds = post.relationships.children;
+                guard !childIds.isEmpty else { return };
+                let fetched = await withTaskGroup(of: PostContent?.self) { group in
+                    for id in childIds { group.addTask { await getPost(postId: id) } }
+                    var results: [PostContent] = [];
+                    for await post in group { if let post, !post.flags.deleted { results.append(post) } }
+                    return results;
+                };
+                activeChildren = fetched.sorted { childIds.firstIndex(of: $0.id) ?? 0 < childIds.firstIndex(of: $1.id) ?? 0 };
             }
         }
     }
@@ -361,6 +374,31 @@ struct RelatedPostsView: View {
 
 }
 
+struct RelatedPostCardContent: View {
+    let post: PostContent;
+    let label: String;
+
+    var body: some View {
+        KFImage(URL(string: post.preview.url ?? ""))
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 80, height: 80)
+            .clipped()
+            .overlay(alignment: .bottomLeading) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+    }
+}
+
 struct RelatedPostCard: View {
     let postId: Int;
     let label: String;
@@ -371,41 +409,17 @@ struct RelatedPostCard: View {
         Group {
             if let post = fetchedPost {
                 NavigationLink(destination: PostView(post: post, search: search)) {
-                    cardContent(for: post)
+                    RelatedPostCardContent(post: post, label: label)
                 }
             } else {
-                cardPlaceholder()
+                ProgressView()
+                    .frame(width: 80, height: 80)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
             }
         }
         .task { fetchedPost = await getPost(postId: postId); }
-    }
-
-    private func cardContent(for post: PostContent) -> some View {
-        KFImage(URL(string: post.preview.url ?? ""))
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-        .frame(width: 80, height: 80)
-        .clipped()
-        .overlay(alignment: .bottomLeading) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(.black.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .padding(4)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
-    }
-
-    private func cardPlaceholder() -> some View {
-        ProgressView()
-            .frame(width: 80, height: 80)
-            .background(Color.secondary.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
     }
 }
 
