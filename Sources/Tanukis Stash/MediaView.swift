@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftyGif
+import Kingfisher
 
 struct MediaView: View {
 
@@ -35,22 +36,22 @@ struct MediaView: View {
 }
 
 struct ImageView: View {
-    
+
     @State var post: PostContent;
 
     var body: some View {
-        AsyncImage(url: URL(string: post.file.url!)) { image in
-            image
-                .resizable()
-        } 
-        placeholder: {
-            ZStack {
-                AsyncImage(url: URL(string: post.preview.url!))
-                    .opacity(0.25)
-                    .scaledToFit()
-                ProgressView()
+        KFImage(URL(string: post.file.url!))
+            .placeholder {
+                ZStack {
+                    KFImage(URL(string: post.preview.url!))
+                        .resizable()
+                        .opacity(0.25)
+                        .scaledToFit()
+                    ProgressView()
+                }
             }
-        }
+            .fade(duration: 0.25)
+            .resizable()
     }
 }
 

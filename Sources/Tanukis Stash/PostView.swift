@@ -419,7 +419,7 @@ struct PoolCard: View {
     }
 
     var body: some View {
-        NavigationLink(destination: PoolView(poolId: poolId)) {
+        NavigationLink(destination: PoolView(poolId: poolId, pool: pool, initialPosts: firstPost.map { [$0] } ?? [])) {
             Group {
                 if let post = firstPost {
                     KFImage(URL(string: post.preview.url ?? ""))
