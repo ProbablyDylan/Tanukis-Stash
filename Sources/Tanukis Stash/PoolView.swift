@@ -12,9 +12,16 @@ import os.log
 struct PoolView: View {
     let poolId: Int
 
+    init(poolId: Int, pool: PoolContent? = nil, initialPosts: [PostContent] = []) {
+        self.poolId = poolId;
+        _pool = State(initialValue: pool);
+        _posts = State(initialValue: initialPosts);
+        _isLoading = State(initialValue: !initialPosts.isEmpty);
+    }
+
     // Pool & post data
     @State private var pool: PoolContent?
-    @State private var posts = [PostContent]()
+    @State private var posts: [PostContent]
     @State private var currentIndex = 0
     @State private var showGrid = false
     @State private var page = 1
@@ -70,7 +77,10 @@ struct PoolView: View {
         }
         .task {
             if pool == nil { pool = await fetchPool(poolId: poolId) }
-            if posts.isEmpty { await loadPosts() }
+            if let first = posts.first {
+                favorited = first.is_favorited;
+            }
+            await loadPosts();
         }
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
@@ -111,13 +121,19 @@ struct PoolView: View {
     // MARK: - Carousel
 
     private var carouselView: some View {
-        TabView(selection: $currentIndex) {
-            ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                poolPostPage(post: post, index: index)
-                    .tag(index)
+        Group {
+            if posts.count <= 1 && isLoading, let post = posts.first {
+                poolPostPage(post: post, index: 0)
+            } else {
+                TabView(selection: $currentIndex) {
+                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                        poolPostPage(post: post, index: index)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
     }
 
     private func poolPostPage(post: PostContent, index: Int) -> some View {
@@ -167,9 +183,6 @@ struct PoolView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
-
-                    RelatedPostsView(post: post, search: poolTag)
-                        .padding(10)
 
                     if !post.description.isEmpty {
                         DisclosureGroup {
@@ -336,15 +349,22 @@ struct PoolView: View {
     // MARK: - Position Indicator
 
     private var positionIndicator: some View {
-        Text("\(currentIndex + 1) / \(totalCount)")
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .padding(.bottom, 8)
+        Group {
+            if isLoading || posts.count <= 1 && !allLoaded {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Text("\(currentIndex + 1) / \(totalCount)")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .padding(.bottom, 8)
     }
 
     // MARK: - Toolbar
@@ -431,19 +451,25 @@ struct PoolView: View {
     // MARK: - Data Loading
 
     private func loadPosts() async {
-        infoText = "Loading pool..."
-        page = 1
-        posts = await fetchRecentPosts(page, limit, poolTag)
-        if posts.isEmpty {
-            infoText = "No posts found"
-            return
+        isLoading = true;
+        infoText = "Loading pool...";
+        page = 1;
+        let fetched = await fetchRecentPosts(page, limit, poolTag);
+        if fetched.isEmpty && posts.isEmpty {
+            infoText = "No posts found";
+            isLoading = false;
+            return;
         }
-        allLoaded = posts.count < limit
-        prefetchThumbnails()
+        let existingIds = Set(posts.map { $0.id });
+        let newPosts = fetched.filter { !existingIds.contains($0.id) };
+        posts += newPosts;
+        allLoaded = fetched.count < limit;
+        isLoading = false;
+        prefetchThumbnails();
         if let first = posts.first {
-            favorited = first.is_favorited
+            favorited = first.is_favorited;
         }
-        await fetchCurrentPostVote()
+        await fetchCurrentPostVote();
     }
 
     private func loadMorePosts() async {
