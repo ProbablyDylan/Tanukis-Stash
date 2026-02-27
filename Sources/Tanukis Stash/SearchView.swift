@@ -18,6 +18,7 @@ struct SearchView: View {
     @Environment(\.dismissSearch) private var dismissSearch;
     @State private var activeSearch: String;
 
+    @State private var navigateToTagName: String?;
     @State var infoText: String = ""
 
     var limit = 75;
@@ -79,6 +80,9 @@ struct SearchView: View {
                 }
             }
         }
+        .navigationDestination(item: $navigateToTagName) { tagName in
+            TagView(tagName: tagName, searchEnabled: true)
+        }
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
@@ -117,12 +121,18 @@ struct SearchView: View {
             }
         }
         .onSubmit(of: .search) {
-            activeSearch = search;
-            posts = [];
-            Task.init {
-                await getPosts(append: false);
-                searchSuggestions.removeAll();
-                dismissSearch()
+            let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines);
+            if isSingleTagQuery(trimmedSearch) {
+                navigateToTagName = trimmedSearch;
+                dismissSearch();
+            } else {
+                activeSearch = search;
+                posts = [];
+                Task.init {
+                    await getPosts(append: false);
+                    searchSuggestions.removeAll();
+                    dismissSearch();
+                }
             }
         }
     }

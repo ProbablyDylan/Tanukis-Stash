@@ -8,6 +8,7 @@ import Kingfisher
 
 struct TagView: View {
     let tagName: String;
+    var searchEnabled: Bool = false;
 
     @State private var wiki: WikiPage?;
     @State private var tagDetail: TagDetail?;
@@ -20,6 +21,12 @@ struct TagView: View {
     @State private var initialLoadComplete: Bool = false;
     @State private var wikiExpanded: Bool = true;
 
+    @State private var search: String = "";
+    @State private var searchSuggestions = [String]();
+    @State private var navigateToTagName: String?;
+    @State private var navigateToSearch: String?;
+    @Environment(\.dismissSearch) private var dismissSearch;
+
     var limit = 75;
     var vGridLayout = [
         GridItem(.flexible(minimum: 75)),
@@ -31,7 +38,7 @@ struct TagView: View {
         tagName.replacingOccurrences(of: "_", with: " ");
     }
 
-    var body: some View {
+    var tagContent: some View {
         ScrollView(.vertical) {
             if let wiki = wiki, !wiki.body.isEmpty {
                 DisclosureGroup(isExpanded: $wikiExpanded) {
@@ -140,6 +147,9 @@ struct TagView: View {
                     }
                 }
             }
+            if searchEnabled {
+                DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            }
         }
         .refreshable {
             page = 1;
@@ -148,6 +158,53 @@ struct TagView: View {
             wiki = await wikiFetch;
             posts = await postsFetch;
             prefetchThumbnails();
+        }
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if searchEnabled {
+            tagContent
+                .searchable(text: $search, prompt: "Search for tags") {
+                    ForEach(searchSuggestions, id: \.self) { tag in
+                        Button(action: { handleSuggestionTap(tag); }) {
+                            Text(tag);
+                        }
+                    }
+                }
+                .onChange(of: search) {
+                    if search.count >= 3 {
+                        Task { searchSuggestions = await createTagList(search); }
+                    }
+                }
+                .onSubmit(of: .search) {
+                    let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines);
+                    if isSingleTagQuery(trimmed) {
+                        navigateToTagName = trimmed;
+                    } else {
+                        navigateToSearch = trimmed;
+                    }
+                    dismissSearch();
+                }
+                .navigationDestination(item: $navigateToTagName) { tag in
+                    TagView(tagName: tag, searchEnabled: true)
+                }
+                .navigationDestination(item: $navigateToSearch) { query in
+                    SearchView(search: query)
+                }
+        } else {
+            tagContent
+        }
+    }
+
+    func handleSuggestionTap(_ tag: String) {
+        if search.contains(" ") {
+            let index = search.lastIndex(of: " ");
+            if index != nil {
+                search = String(search[...index!].trimmingCharacters(in: .whitespaces) + " " + tag);
+            }
+        } else {
+            search = tag;
         }
     }
 

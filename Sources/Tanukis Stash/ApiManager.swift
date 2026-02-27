@@ -134,6 +134,16 @@ func fetchTags(_ text: String) async -> [String] {
     }
 }
 
+func isSingleTagQuery(_ query: String) -> Bool {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines);
+    if trimmed.isEmpty { return false; }
+    if trimmed.contains(" ") { return false; }
+    if trimmed.hasPrefix("-") || trimmed.hasPrefix("~") { return false; }
+    if trimmed.contains(":") { return false; }
+    if trimmed.contains("*") { return false; }
+    return true;
+}
+
 func parseSearch(_ searchText: String) -> String {
     if(searchText.contains(" ")) {
         let index = searchText.lastIndex(of: " ");
