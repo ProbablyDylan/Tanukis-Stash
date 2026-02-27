@@ -23,6 +23,7 @@ struct PoolView: View {
     @State private var pool: PoolContent?
     @State private var posts: [PostContent]
     @State private var currentIndex = 0
+    @State private var scrolledIndex: Int?
     @State private var showGrid = false
     @State private var page = 1
     @State private var isLoading = false
@@ -38,6 +39,7 @@ struct PoolView: View {
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
     @State private var preparingShare = false
+    @State private var selectedArtist: String?
 
     @State private var AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED")
     @Namespace private var gridTransition
@@ -84,6 +86,7 @@ struct PoolView: View {
                 favorited = first.is_favorited;
             }
             await loadPosts();
+            if scrolledIndex == nil { scrolledIndex = currentIndex; }
         }
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
@@ -119,24 +122,37 @@ struct PoolView: View {
         .onChange(of: displayToastType) { _, newValue in
             if newValue == 2 { clearToast() }
         }
+        .navigationDestination(item: $selectedArtist) { artist in
+            TagView(tagName: artist)
+        }
     }
 
     // MARK: - Carousel
 
     private var carouselView: some View {
-        TabView(selection: $currentIndex) {
-            ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                poolPostPage(post: post, index: index)
-                    .tag(index)
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                    poolPostPage(post: post, index: index)
+                        .id(index)
+                        .containerRelativeFrame(.horizontal)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $scrolledIndex)
+        .onChange(of: scrolledIndex) { _, newValue in
+            if let newValue, newValue != currentIndex {
+                currentIndex = newValue;
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
     }
 
     private func poolPostPage(post: PostContent, index: Int) -> some View {
-        GeometryReader { geometry in
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
+        ScrollView(.vertical) {
+            VStack(spacing: 0) {
+                GeometryReader { geometry in
                     MediaView(post: post, geometry: geometry)
                         .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: !showGrid)
                         .gesture(
@@ -148,7 +164,9 @@ struct PoolView: View {
                             width: geometry.size.width,
                             height: CGFloat(post.file.height) * (geometry.size.width / CGFloat(post.file.width))
                         )
-                        .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
+                }
+                .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
+                .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
 
                     // Metadata bar
                     HStack(alignment: .top, spacing: 10) {
@@ -210,7 +228,6 @@ struct PoolView: View {
                     Spacer().frame(height: 60)
                 }
             }
-        }
     }
 
     @ViewBuilder
@@ -227,8 +244,8 @@ struct PoolView: View {
         } else if post.tags.artist.count > 1 {
             Menu {
                 ForEach(post.tags.artist, id: \.self) { artist in
-                    NavigationLink(destination: TagView(tagName: artist)) {
-                        Text(artist)
+                    Button(artist) {
+                        selectedArtist = artist;
                     }
                 }
             } label: {
@@ -255,7 +272,8 @@ struct PoolView: View {
                 LazyVGrid(columns: gridColumns) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                         Button {
-                            currentIndex = index
+                            currentIndex = index;
+                            scrolledIndex = index;
                             withAnimation(.easeInOut(duration: 0.25)) { showGrid = false }
                         } label: {
                             gridCell(post: post, isSelected: index == currentIndex)

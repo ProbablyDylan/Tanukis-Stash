@@ -26,21 +26,24 @@ struct PostView: View {
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
     @State private var preparingShare = false;
+    @State private var selectedArtist: String?;
 
     private var tapGesture: some Gesture {
         !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView(.vertical) {
-                VStack {
+        ScrollView(.vertical) {
+            VStack {
+                GeometryReader { geometry in
                     MediaView(post: post, geometry: geometry).gesture(tapGesture)
                         .frame(
                             width: geometry.size.width,
                             height: calculateImageHeight(geometry: geometry)
                         )
-                        .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
+                }
+                .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
+                .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(post.rating.uppercased()) · #\(post.id)")
@@ -76,8 +79,8 @@ struct PostView: View {
                         } else if post.tags.artist.count > 1 {
                             Menu {
                                 ForEach(post.tags.artist, id: \.self) { artist in
-                                    NavigationLink(destination: TagView(tagName: artist)) {
-                                        Text(artist)
+                                    Button(artist) {
+                                        selectedArtist = artist;
                                     }
                                 }
                             } label: {
@@ -195,7 +198,9 @@ struct PostView: View {
                 await fetchCurrentPostLiked()
                 await fetchCurrentPostVote()
             }
-        }
+            .navigationDestination(item: $selectedArtist) { artist in
+                TagView(tagName: artist)
+            }
     }
 
     func calculateImageHeight(geometry: GeometryProxy) -> CGFloat {
@@ -540,14 +545,19 @@ struct Tag: View {
     let tag: String
     let search: String
     let textColor: Color;
-    @State var isActive: Bool = false
-    
+    @State var tagDestination: Bool = false;
+    @State var searchDestination: Bool = false;
+
     var body: some View {
         Menu {
-            NavigationLink(destination: TagView(tagName: String(tag))) {
+            Button {
+                tagDestination = true;
+            } label: {
                 Text("View Tag")
             }
-            NavigationLink(destination: SearchView(search: String(search + " " + tag))) {
+            Button {
+                searchDestination = true;
+            } label: {
                 Text("Add to Current Search")
             }
         } label: {
@@ -556,10 +566,13 @@ struct Tag: View {
                 .foregroundColor(textColor)
                 .multilineTextAlignment(.leading)
         } primaryAction: {
-            isActive.toggle()
+            tagDestination = true;
         }
-        .navigationDestination(isPresented: $isActive) {
+        .navigationDestination(isPresented: $tagDestination) {
             TagView(tagName: String(tag))
+        }
+        .navigationDestination(isPresented: $searchDestination) {
+            SearchView(search: String(search + " " + tag))
         }
     }
 }
