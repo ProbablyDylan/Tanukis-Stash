@@ -6,17 +6,26 @@ struct VideoPlayerController: UIViewControllerRepresentable {
     var videoURL: URL
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let player = AVPlayer(url: videoURL)
-        player.allowsExternalPlayback = ENABLE_AIRPLAY
-        let playerViewController = AVPlayerViewController()
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default);
+        try? AVAudioSession.sharedInstance().setActive(true);
 
-        playerViewController.player = player
- 
-        return playerViewController
+        let player = AVPlayer(url: videoURL)
+        player.allowsExternalPlayback = ENABLE_AIRPLAY;
+        let playerViewController = AVPlayerViewController();
+
+        playerViewController.player = player;
+
+        return playerViewController;
     }
-    
+
+    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: ()) {
+        uiViewController.player?.pause();
+        uiViewController.player = nil;
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation);
+    }
+
     func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
-        
-    }    
+
+    }
 }
  
