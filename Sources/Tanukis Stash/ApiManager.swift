@@ -119,7 +119,7 @@ func updateBlacklist(tags: String) async -> Bool {
     return true;
 }
 
-func fetchTags(_ text: String) async -> [String] {
+func fetchTags(_ text: String) async -> [TagSuggestion] {
     do {
         let encoded: String? = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
         let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded!)&expiry=7&_client=\(userAgent)"
@@ -127,7 +127,7 @@ func fetchTags(_ text: String) async -> [String] {
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
         if (data) == nil { return []; }
         let tags: [TagContent] = try JSONDecoder().decode([TagContent].self, from: data!)
-        return tags.map { $0.name };
+        return tags.map { TagSuggestion(name: $0.name, category: $0.category) };
     } catch {
         //os_log("%{public}s", log: .default, error);
         return [];
@@ -155,9 +155,13 @@ func parseSearch(_ searchText: String) -> String {
     else { return searchText; }
 }
 
-func createTagList(_ search: String) async -> [String] {
+func createTagList(_ search: String) async -> [TagSuggestion] {
     let newSearchText = parseSearch(search);
     if(newSearchText.count >= 3) {
+        let cached = searchLocalTags(newSearchText);
+        if !cached.isEmpty {
+            return cached.map { TagSuggestion(name: $0.name, category: $0.category) };
+        }
         return await fetchTags(newSearchText);
     }
     return []

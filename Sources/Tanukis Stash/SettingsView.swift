@@ -21,7 +21,8 @@ struct SettingsView: View {
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: "USER_ICON") ?? "";
     @State private var blacklistEntries: [String] = [];
     @State private var newBlacklistTag: String = "";
-    @State private var tagSuggestions: [String] = [];
+    @State private var tagSuggestions: [TagSuggestion] = [];
+    @State private var suggestionTask: Task<Void, Never>?;
     @State private var isSavingBlacklist: Bool = false;
     @State private var blacklistSaveSuccess: Bool? = nil;
 
@@ -81,12 +82,16 @@ struct SettingsView: View {
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
                                 .onChange(of: newBlacklistTag) {
-                                    Task {
-                                        if newBlacklistTag.count >= 3 {
-                                            tagSuggestions = await createTagList(newBlacklistTag);
-                                        } else {
-                                            tagSuggestions = [];
-                                        }
+                                    suggestionTask?.cancel();
+                                    if newBlacklistTag.count >= 3 {
+                                        suggestionTask = Task {
+                                            try? await Task.sleep(for: .milliseconds(150));
+                                            if !Task.isCancelled {
+                                                tagSuggestions = await createTagList(newBlacklistTag);
+                                            }
+                                        };
+                                    } else {
+                                        tagSuggestions = [];
                                     }
                                 }
                                 .onSubmit {
@@ -103,11 +108,11 @@ struct SettingsView: View {
                         if !tagSuggestions.isEmpty {
                             ForEach(tagSuggestions, id: \.self) { tag in
                                 Button(action: {
-                                    newBlacklistTag = tag;
+                                    newBlacklistTag = tag.name;
                                     tagSuggestions = [];
                                 }) {
-                                    Text(tag)
-                                        .foregroundColor(.accentColor)
+                                    Text(tag.name)
+                                        .foregroundColor(tagCategoryColor(tag.category))
                                 }
                             }
                         }

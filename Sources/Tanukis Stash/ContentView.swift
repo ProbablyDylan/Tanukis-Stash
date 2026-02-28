@@ -25,6 +25,7 @@ struct ContentView: View {
             if (loginStatus) {
                 UserDefaults.standard.set(await fetchBlacklist().trimmingCharacters(in: .whitespacesAndNewlines), forKey: "USER_BLACKLIST");
             }
+            await tagCacheSyncIfNeeded();
         }
     }
 

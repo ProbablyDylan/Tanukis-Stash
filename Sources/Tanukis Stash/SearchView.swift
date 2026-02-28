@@ -10,7 +10,8 @@ import Kingfisher
 
 struct SearchView: View {
     @State var posts = [PostContent]();
-    @State var searchSuggestions = [String]();
+    @State var searchSuggestions = [TagSuggestion]();
+    @State private var suggestionTask: Task<Void, Never>?;
     @State var search: String;
     @State var page = 1;
     @State var showSettings = false;
@@ -74,9 +75,10 @@ struct SearchView: View {
         .searchable(text: $search, prompt: "Search for tags") {
             ForEach(searchSuggestions, id: \.self) { tag in
                 Button(action: {
-                    updateSearch(tag);
+                    updateSearch(tag.name);
                 }) {
-                    Text(tag);
+                    Text(tag.name)
+                        .foregroundColor(tagCategoryColor(tag.category));
                 }
             }
         }
@@ -115,9 +117,13 @@ struct SearchView: View {
                     await getPosts(append: false);
                 }
             } else if(search.count >= 3) {
-                Task.init {
-                    searchSuggestions = await createTagList(search);
-                }
+                suggestionTask?.cancel();
+                suggestionTask = Task {
+                    try? await Task.sleep(for: .milliseconds(150));
+                    if !Task.isCancelled {
+                        searchSuggestions = await createTagList(search);
+                    }
+                };
             }
         }
         .onSubmit(of: .search) {

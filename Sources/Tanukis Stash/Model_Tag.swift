@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+struct TagSuggestion: Hashable {
+    let name: String;
+    let category: Int;
+}
+
 struct TagContent: Decodable {
     let id: Int;
     let name: String;

@@ -22,7 +22,8 @@ struct TagView: View {
     @State private var wikiExpanded: Bool = true;
 
     @State private var search: String = "";
-    @State private var searchSuggestions = [String]();
+    @State private var searchSuggestions = [TagSuggestion]();
+    @State private var suggestionTask: Task<Void, Never>?;
     @State private var navigateToTagName: String?;
     @State private var navigateToSearch: String?;
     @Environment(\.dismissSearch) private var dismissSearch;
@@ -167,14 +168,21 @@ struct TagView: View {
             tagContent
                 .searchable(text: $search, prompt: "Search for tags") {
                     ForEach(searchSuggestions, id: \.self) { tag in
-                        Button(action: { handleSuggestionTap(tag); }) {
-                            Text(tag);
+                        Button(action: { handleSuggestionTap(tag.name); }) {
+                            Text(tag.name)
+                                .foregroundColor(tagCategoryColor(tag.category));
                         }
                     }
                 }
                 .onChange(of: search) {
                     if search.count >= 3 {
-                        Task { searchSuggestions = await createTagList(search); }
+                        suggestionTask?.cancel();
+                        suggestionTask = Task {
+                            try? await Task.sleep(for: .milliseconds(150));
+                            if !Task.isCancelled {
+                                searchSuggestions = await createTagList(search);
+                            }
+                        };
                     }
                 }
                 .onSubmit(of: .search) {
