@@ -136,6 +136,55 @@ func getVideoLink(post: PostContent) -> URL? {
     return nil;
 }
 
+func downloadToTemp(post: PostContent) async throws -> URL {
+    let ext = post.file.ext;
+    let downloadURL: URL;
+
+    if ext == "webm" || ext == "mp4" {
+        guard let url = getVideoLink(post: post) else { throw URLError(.fileDoesNotExist); }
+        downloadURL = url;
+    } else {
+        guard let urlString = post.file.url, let url = URL(string: urlString) else {
+            throw URLError(.badURL);
+        }
+        downloadURL = url;
+    }
+
+    let destExt = ext == "webm" ? "mp4" : ext;
+    let destURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(post.id).\(destExt)");
+
+    if !FileManager.default.fileExists(atPath: destURL.path) {
+        let (downloadedURL, _) = try await URLSession.shared.download(from: downloadURL);
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            try FileManager.default.removeItem(at: destURL);
+        }
+        try FileManager.default.moveItem(at: downloadedURL, to: destURL);
+    }
+    return destURL;
+}
+
+@MainActor
+func prepareAndShareContent(
+    post: PostContent,
+    preparingShare: Binding<Bool>,
+    shareItems: Binding<[Any]>,
+    showShareSheet: Binding<Bool>,
+    displayToastType: Binding<Int>
+) {
+    preparingShare.wrappedValue = true;
+    Task {
+        do {
+            let tempURL = try await downloadToTemp(post: post);
+            shareItems.wrappedValue = [tempURL];
+            showShareSheet.wrappedValue = true;
+            preparingShare.wrappedValue = false;
+        } catch {
+            os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))");
+            preparingShare.wrappedValue = false; displayToastType.wrappedValue = 1;
+        }
+    }
+}
+
 func saveFile(post: PostContent, showToast: Binding<Int>) {
     Task {
         do {

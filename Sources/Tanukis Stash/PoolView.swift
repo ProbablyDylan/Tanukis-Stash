@@ -5,8 +5,6 @@
 
 import SwiftUI
 import Kingfisher
-import AlertToast
-import os.log
 
 @MainActor
 struct PoolView: View {
@@ -107,15 +105,7 @@ struct PoolView: View {
         .sheet(isPresented: $showShareSheet) {
             ActivityView(activityItems: shareItems)
         }
-        .toast(isPresenting: Binding<Bool>(
-            get: { [1, 3, 4, 5].contains(displayToastType) },
-            set: { _ in }
-        )) {
-            getToast()
-        }
-        .onChange(of: displayToastType) { _, newValue in
-            if newValue == 2 { clearToast() }
-        }
+        .postToast(displayToastType: $displayToastType)
         .navigationDestination(item: $selectedArtist) { artist in
             TagView(tagName: artist)
         }
@@ -162,35 +152,7 @@ struct PoolView: View {
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
                 .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
 
-                    // Metadata bar
-                    HStack(alignment: .top, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(post.rating.uppercased()) · #\(post.id)")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 10) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.up")
-                                    Text("\(post.score.total)")
-                                }
-                                HStack(spacing: 4) {
-                                    Image(systemName: "heart.fill")
-                                    Text("\(post.fav_count)")
-                                }
-                                HStack(spacing: 4) {
-                                    Image(systemName: "bubble.right")
-                                    Text("\(post.comment_count)")
-                                }
-                            }
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        artistView(for: post)
-                    }
-                    .padding(12)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    PostMetadataBar(post: post, selectedArtist: $selectedArtist)
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
 
@@ -222,35 +184,6 @@ struct PoolView: View {
                     Spacer().frame(height: 60)
                 }
             }
-    }
-
-    @ViewBuilder
-    private func artistView(for post: PostContent) -> some View {
-        if post.tags.artist.count == 1 {
-            NavigationLink(destination: TagView(tagName: post.tags.artist[0])) {
-                HStack(spacing: 4) {
-                    Image(systemName: "paintpalette.fill")
-                    Text(post.tags.artist[0])
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-        } else if post.tags.artist.count > 1 {
-            Menu {
-                ForEach(post.tags.artist, id: \.self) { artist in
-                    Button(artist) {
-                        selectedArtist = artist;
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "paintpalette.fill")
-                    Text(post.tags.artist.joined(separator: ", "))
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-        }
     }
 
     // MARK: - Grid
@@ -426,7 +359,8 @@ struct PoolView: View {
                         )
                     }
                     Button {
-                        prepareAndShareContent()
+                        guard let post = currentPost else { return }
+                        prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType)
                     } label: {
                         Label("Share Content", systemImage: "photo")
                     }
@@ -482,81 +416,4 @@ struct PoolView: View {
         score_valid = [-1, 0, 1].contains(our_score)
     }
 
-    // MARK: - Sharing
-
-    private func prepareAndShareContent() {
-        guard let post = currentPost else { return }
-        preparingShare = true
-        Task {
-            do {
-                let tempURL = try await downloadToTemp(post: post)
-                await MainActor.run {
-                    shareItems = [tempURL]
-                    showShareSheet = true
-                    preparingShare = false
-                }
-            } catch {
-                os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))")
-                await MainActor.run { preparingShare = false; displayToastType = 1 }
-            }
-        }
-    }
-
-    private func downloadToTemp(post: PostContent) async throws -> URL {
-        let ext = post.file.ext
-        let downloadURL: URL
-
-        if ext == "webm" || ext == "mp4" {
-            guard let url = getVideoLink(post: post) else { throw URLError(.fileDoesNotExist) }
-            downloadURL = url
-        } else {
-            guard let urlString = post.file.url, let url = URL(string: urlString) else {
-                throw URLError(.badURL)
-            }
-            downloadURL = url
-        }
-
-        let destExt = ext == "webm" ? "mp4" : ext
-        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(post.id).\(destExt)")
-
-        if !FileManager.default.fileExists(atPath: destURL.path) {
-            let (downloadedURL, _) = try await URLSession.shared.download(from: downloadURL)
-            if FileManager.default.fileExists(atPath: destURL.path) {
-                try FileManager.default.removeItem(at: destURL)
-            }
-            try FileManager.default.moveItem(at: downloadedURL, to: destURL)
-        }
-        return destURL
-    }
-
-    // MARK: - Toast
-
-    private func clearToast() {
-        let current = displayToastType
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            if current == displayToastType {
-                displayToastType = 0
-            }
-        }
-    }
-
-    private func getToast() -> AlertToast {
-        switch displayToastType {
-        case 1:
-            clearToast()
-            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to save")
-        case 3:
-            clearToast()
-            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Photos permission required")
-        case 4:
-            clearToast()
-            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to move file")
-        case 5:
-            clearToast()
-            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "No video available")
-        default:
-            clearToast()
-            return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Unknown error")
-        }
-    }
 }
