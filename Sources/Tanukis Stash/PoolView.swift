@@ -153,7 +153,7 @@ struct PoolView: View {
         ScrollView(.vertical) {
             VStack(spacing: 0) {
                 GeometryReader { geometry in
-                    MediaView(post: post, geometry: geometry)
+                    MediaView(post: post)
                         .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: !showGrid)
                         .gesture(
                             !["webm", "mp4"].contains(String(post.file.ext))

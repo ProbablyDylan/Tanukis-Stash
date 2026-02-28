@@ -129,7 +129,6 @@ func fetchTags(_ text: String) async -> [TagSuggestion] {
         let tags: [TagContent] = try JSONDecoder().decode([TagContent].self, from: data!)
         return tags.map { TagSuggestion(name: $0.name, category: $0.category) };
     } catch {
-        //os_log("%{public}s", log: .default, error);
         return [];
     }
 }
@@ -282,11 +281,9 @@ func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
     if (data == nil) { return 0; }
     do {
         let json = try JSONDecoder().decode(VoteResponse.self, from: data!);
-        //os_log("%{public}@", log: .default, json);
         return json.our_score ?? 0
     }
     catch {
-        //os_log("Error decoding vote response: %{public}s", log: .default, error);
         return 0
     }
 }

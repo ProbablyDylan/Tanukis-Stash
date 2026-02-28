@@ -36,7 +36,7 @@ struct PostView: View {
         ScrollView(.vertical) {
             VStack {
                 GeometryReader { geometry in
-                    MediaView(post: post, geometry: geometry).gesture(tapGesture)
+                    MediaView(post: post).gesture(tapGesture)
                         .frame(
                             width: geometry.size.width,
                             height: calculateImageHeight(geometry: geometry)
@@ -246,7 +246,7 @@ struct PostView: View {
             let parsedData = try JSONDecoder().decode(Post.self, from: data!)
             favorited = parsedData.post.is_favorited;
         } catch {
-            print(error);
+            os_log("Error fetching post liked state: %{public}s", log: .default, error.localizedDescription);
         }
     }
 

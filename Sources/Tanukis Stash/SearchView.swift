@@ -176,23 +176,6 @@ struct SearchView: View {
     
 }
 
-class SearchableViewModel: ObservableObject {
-    var dismissClosure: () -> Void = { print("Not Set") }
-}
-
-struct SearchableViewPassthrough: ViewModifier {
-    @Environment(\.isSearching) var isSearching
-    @Environment(\.dismissSearch) var dismissSearch
-    let viewModel: SearchableViewModel
-
-    func body(content: Content) -> some View {
-        content
-        .onAppear {
-            viewModel.dismissClosure = { dismissSearch() }
-        }
-    }
-}
-
 struct PostPreviewFrame: View {
     let post: PostContent;
     let search: String;

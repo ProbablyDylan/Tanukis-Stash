@@ -3,14 +3,12 @@ import Kingfisher
 
 struct MediaView: View {
 
-    @State var post: PostContent;
-    @State var geometry: GeometryProxy;
-    var isFullScreen: Bool = false
+    let post: PostContent;
 
     var fileType: String {
         return String(post.file.ext)
     }
-    
+
     var body: some View {
         if(post.preview.url == nil || post.file.url == nil) {
             Text("Failed to load image data!")
@@ -23,20 +21,17 @@ struct MediaView: View {
         else if(["webm", "mp4"].contains(fileType)) {
             VideoView(post: post)
         }
-        else if(!["gif", "webm", "mp4"].contains(fileType)) {
+        else {
             ImageView(post: post)
             .aspectRatio(contentMode: .fit)
         }
-        else {
-            Text("")
-        }
     }
-    
+
 }
 
 struct ImageView: View {
 
-    @State var post: PostContent;
+    let post: PostContent;
 
     var body: some View {
         KFImage(URL(string: post.file.url!))
@@ -56,7 +51,7 @@ struct ImageView: View {
 
 struct GIFView: View {
 
-    @State var post: PostContent;
+    let post: PostContent;
 
     var body: some View {
         AnimatedGifView(url: URL(string: post.file.url!)!)
@@ -65,7 +60,7 @@ struct GIFView: View {
 
 struct VideoView: View {
 
-    @State var post: PostContent;
+    let post: PostContent;
 
     var videoLink: URL? {
         return getVideoLink(post: post)
