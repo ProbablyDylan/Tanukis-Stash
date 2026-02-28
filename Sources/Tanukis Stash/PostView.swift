@@ -21,7 +21,7 @@ struct PostView: View {
     @State private var favorited: Bool = false;
     @State private var our_score: Int = 2;
     @State private var score_valid: Bool = false;
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     @State private var descExpanded: Bool = true;
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
@@ -169,7 +169,7 @@ struct PostView: View {
                             Label("Save to Photos", systemImage: "square.and.arrow.down")
                         }
                         ShareLink(
-                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!,
+                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)")!,
                             label: { Label("Share Link", systemImage: "link") }
                         )
                         Button {

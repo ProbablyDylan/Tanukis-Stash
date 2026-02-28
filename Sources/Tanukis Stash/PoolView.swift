@@ -41,16 +41,10 @@ struct PoolView: View {
     @State private var preparingShare = false
     @State private var selectedArtist: String?
 
-    @State private var AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED")
+    @State private var AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated)
     @Namespace private var gridTransition
 
     private let limit = 75
-    private let gridColumns = [
-        GridItem(.flexible(minimum: 75)),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-
     private var poolTag: String { "pool:\(poolId) order:id" }
     private var poolDisplayName: String {
         pool?.name.replacingOccurrences(of: "_", with: " ") ?? "Pool \(poolId)"
@@ -269,7 +263,7 @@ struct PoolView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
-                LazyVGrid(columns: gridColumns) {
+                LazyVGrid(columns: postGridColumns) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                         Button {
                             currentIndex = index;
@@ -288,7 +282,7 @@ struct PoolView: View {
                 allLoaded = false
                 pool = await fetchPool(poolId: poolId)
                 posts = await fetchRecentPosts(page, limit, poolTag)
-                prefetchThumbnails()
+                prefetchThumbnails(for: posts)
             }
             .onAppear {
                 proxy.scrollTo(currentIndex, anchor: .center)
@@ -427,7 +421,7 @@ struct PoolView: View {
                     }
                     if let post = currentPost {
                         ShareLink(
-                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: "api_source") ?? "e926.net")/posts/\(post.id)")!,
+                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)")!,
                             label: { Label("Share Link", systemImage: "link") }
                         )
                     }
@@ -474,17 +468,13 @@ struct PoolView: View {
         posts = allPosts;
         allLoaded = true;
         isLoading = false;
-        prefetchThumbnails();
+        prefetchThumbnails(for: posts);
         if let first = posts.first {
             favorited = first.is_favorited;
         }
         await fetchCurrentPostVote();
     }
 
-    private func prefetchThumbnails() {
-        let urls = posts.compactMap { URL(string: $0.preview.url ?? "") }
-        ImagePrefetcher(urls: urls).start()
-    }
 
     private func fetchCurrentPostVote() async {
         guard let post = currentPost else { return }

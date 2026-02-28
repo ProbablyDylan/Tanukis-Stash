@@ -15,7 +15,7 @@ struct SearchView: View {
     @State var search: String;
     @State var page = 1;
     @State var showSettings = false;
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     @Environment(\.dismissSearch) private var dismissSearch;
     @State private var activeSearch: String;
 
@@ -23,12 +23,6 @@ struct SearchView: View {
     @State var infoText: String = ""
 
     var limit = 75;
-    var vGridLayout = [
-        GridItem(.flexible(minimum: 75)),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-
     var loadingText = "Loading posts...";
     var noPostsFoundText = "No posts found";
 
@@ -43,7 +37,7 @@ struct SearchView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            LazyVGrid(columns: vGridLayout) {
+            LazyVGrid(columns: postGridColumns) {
                 ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
                     PostPreviewFrame(post: post, search: search)
                     .onAppear {
@@ -105,7 +99,7 @@ struct SearchView: View {
         }
         #endif
         .sheet(isPresented: $showSettings, onDismiss: {
-            AUTHENTICATED = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+            AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
         }) {
             SettingsView()
         }
@@ -160,18 +154,11 @@ struct SearchView: View {
             infoText = noPostsFoundText
         }
 
-        let prefetchURLs = newPosts.compactMap { URL(string: $0.preview.url ?? "") };
-        ImagePrefetcher(urls: prefetchURLs).start();
+        prefetchThumbnails(for: newPosts);
     }
     
     func updateSearch(_ tag: String) {
-        if(search.contains(" ")) {
-            let index = search.lastIndex(of: " ");
-            if(index != nil) {
-                search = String(search[...index!].trimmingCharacters(in: .whitespaces) + " " + tag);
-            }
-        }
-        else { search = tag; }
+        search = replaceLastSearchWord(in: search, with: tag);
     }
     
 }

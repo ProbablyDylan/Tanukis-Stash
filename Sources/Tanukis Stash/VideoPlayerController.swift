@@ -2,7 +2,7 @@ import SwiftUI
 import AVKit
  
 struct VideoPlayerController: UIViewControllerRepresentable {
-    @State private var ENABLE_AIRPLAY = UserDefaults.standard.bool(forKey: "ENABLE_AIRPLAY");
+    @State private var ENABLE_AIRPLAY = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     var videoURL: URL
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {

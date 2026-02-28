@@ -29,12 +29,6 @@ struct TagView: View {
     @Environment(\.dismissSearch) private var dismissSearch;
 
     var limit = 75;
-    var vGridLayout = [
-        GridItem(.flexible(minimum: 75)),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ];
-
     private var displayName: String {
         tagName.replacingOccurrences(of: "_", with: " ");
     }
@@ -104,7 +98,7 @@ struct TagView: View {
                     .padding(.vertical, 20)
             }
 
-            LazyVGrid(columns: vGridLayout) {
+            LazyVGrid(columns: postGridColumns) {
                 ForEach(Array(posts.enumerated()), id: \.element) { i, post in
                     PostPreviewFrame(post: post, search: tagName)
                     .onAppear {
@@ -158,7 +152,7 @@ struct TagView: View {
             async let postsFetch = fetchRecentPosts(1, limit, tagName);
             wiki = await wikiFetch;
             posts = await postsFetch;
-            prefetchThumbnails();
+            prefetchThumbnails(for: posts);
         }
     }
 
@@ -206,21 +200,14 @@ struct TagView: View {
     }
 
     func handleSuggestionTap(_ tag: String) {
-        if search.contains(" ") {
-            let index = search.lastIndex(of: " ");
-            if index != nil {
-                search = String(search[...index!].trimmingCharacters(in: .whitespaces) + " " + tag);
-            }
-        } else {
-            search = tag;
-        }
+        search = replaceLastSearchWord(in: search, with: tag);
     }
 
     func loadPosts() async {
         page = 1;
         posts = await fetchRecentPosts(page, limit, tagName);
         initialLoadComplete = true;
-        prefetchThumbnails();
+        prefetchThumbnails(for: posts);
     }
 
     func loadMorePosts() async {
@@ -229,11 +216,7 @@ struct TagView: View {
         page += 1;
         posts += await fetchRecentPosts(page, limit, tagName);
         isLoading = false;
-        prefetchThumbnails();
+        prefetchThumbnails(for: posts);
     }
 
-    func prefetchThumbnails() {
-        let prefetchURLs = posts.compactMap { URL(string: $0.preview.url ?? "") };
-        ImagePrefetcher(urls: prefetchURLs).start();
-    }
 }

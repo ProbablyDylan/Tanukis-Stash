@@ -11,14 +11,14 @@ import Kingfisher
 struct SettingsView: View {
     
     @Environment(\.dismiss) private var dismiss
-    @State private var username: String = UserDefaults.standard.string(forKey: "username") ?? "";
-    @State private var selection: String = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net";
-    @State private var API_KEY: String = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
-    @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: "ENABLE_AIRPLAY");
-    @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: "ENABLE_BLACKLIST");
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
-    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
-    @State private var USER_ICON: String = UserDefaults.standard.string(forKey: "USER_ICON") ?? "";
+    @State private var username: String = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
+    @State private var selection: String = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    @State private var API_KEY: String = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
+    @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
+    @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
+    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
+    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
+    @State private var USER_ICON: String = UserDefaults.standard.string(forKey: UDKey.userIcon) ?? "";
     @State private var blacklistEntries: [String] = [];
     @State private var newBlacklistTag: String = "";
     @State private var tagSuggestions: [TagSuggestion] = [];
@@ -55,11 +55,11 @@ struct SettingsView: View {
                         }
                     } else {
                         TextField("Username", text: $username).onDisappear() {
-                            UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "username");
+                            UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
                         }.disabled(AUTHENTICATED).foregroundColor(AUTHENTICATED ? .gray : .primary);
-                        
+
                         TextField("API Key", text: $API_KEY).onDisappear() {
-                            UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "API_KEY");
+                            UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
                         }.disabled(AUTHENTICATED).foregroundColor(AUTHENTICATED ? .gray : .primary);
                     }
                     LoginButton(AUTHENTICATED: $AUTHENTICATED, username: $username, API_KEY: $API_KEY)
@@ -124,7 +124,7 @@ struct SettingsView: View {
                                 let success = await updateBlacklist(tags: tags);
                                 if success {
                                     BLACKLIST = tags;
-                                    UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                                    UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
                                 }
                                 isSavingBlacklist = false;
                                 blacklistSaveSuccess = success;
@@ -148,7 +148,7 @@ struct SettingsView: View {
                     .onAppear {
                         Task {
                             BLACKLIST = await fetchBlacklist();
-                            UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                            UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
                             blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
                         }
                     }
@@ -162,18 +162,18 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.menu)
                     .onChange(of: selection) {
-                        UserDefaults.standard.set(selection, forKey: "api_source");
+                        UserDefaults.standard.set(selection, forKey: UDKey.apiSource);
                     }
                     Toggle("Enable AirPlay", isOn: $ENABLE_AIRPLAY)
                         .toggleStyle(.switch)
                         .onChange(of: ENABLE_AIRPLAY) {
-                            UserDefaults.standard.set(ENABLE_AIRPLAY, forKey: "ENABLE_AIRPLAY");
+                            UserDefaults.standard.set(ENABLE_AIRPLAY, forKey: UDKey.enableAirplay);
                         }
                     if (AUTHENTICATED) {
                         Toggle("Enable Blacklist", isOn: $ENABLE_BLACKLIST)
                             .toggleStyle(.switch)
                             .onChange(of: ENABLE_BLACKLIST) {
-                                UserDefaults.standard.set(ENABLE_BLACKLIST, forKey: "ENABLE_BLACKLIST");
+                                UserDefaults.standard.set(ENABLE_BLACKLIST, forKey: UDKey.enableBlacklist);
                             }
                     }
                 }
@@ -204,7 +204,7 @@ struct SettingsView: View {
             }
             .refreshable {
                 BLACKLIST = await fetchBlacklist();
-                UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
                 blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
             }
         }
@@ -233,7 +233,7 @@ struct SettingsView: View {
             // Otherwise, use the file URL
             USER_ICON = post.file.url!
         }
-        UserDefaults.standard.set(USER_ICON, forKey: "USER_ICON");
+        UserDefaults.standard.set(USER_ICON, forKey: UDKey.userIcon);
     }
 }
 
@@ -248,28 +248,28 @@ struct LoginButton: View {
     @Binding var username: String
     @Binding var API_KEY: String
     @State private var ShowAlert: Bool = false;
-    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
-    
+    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
+
     var body: some View {
         if (AUTHENTICATED) {
             Button("Logout") {
                 AUTHENTICATED = false;
-                UserDefaults.standard.set(AUTHENTICATED, forKey: "AUTHENTICATED");
+                UserDefaults.standard.set(AUTHENTICATED, forKey: UDKey.authenticated);
             }.foregroundColor(.red)
         } else {
             Button("Login") {
                 Task {
-                    UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "username");
-                    UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "API_KEY");
+                    UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
+                    UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
                     AUTHENTICATED = await login();
-                    UserDefaults.standard.set(AUTHENTICATED, forKey: "AUTHENTICATED");
+                    UserDefaults.standard.set(AUTHENTICATED, forKey: UDKey.authenticated);
                     if (!AUTHENTICATED) {
                         ShowAlert.toggle()
                     }
                     if (AUTHENTICATED) {
                         // Fetch user data and blacklist if login is successful
                         BLACKLIST = await fetchBlacklist();
-                        UserDefaults.standard.set(BLACKLIST, forKey: "USER_BLACKLIST");
+                        UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
                     }
                 }
             }

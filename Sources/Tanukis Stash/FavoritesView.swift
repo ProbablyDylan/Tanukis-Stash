@@ -21,16 +21,10 @@ struct FavoritesView: View {
     @State private var sortOption: FavoriteSortOption = .newest;
 
     private var searchTag: String {
-        "fav:\(UserDefaults.standard.string(forKey: "username") ?? "")"
+        "fav:\(UserDefaults.standard.string(forKey: UDKey.username) ?? "")"
     }
 
     var limit = 75;
-    var vGridLayout = [
-        GridItem(.flexible(minimum: 75)),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ];
-
     private var sortedPosts: [PostContent] {
         switch sortOption {
         case .newest:
@@ -50,7 +44,7 @@ struct FavoritesView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            LazyVGrid(columns: vGridLayout) {
+            LazyVGrid(columns: postGridColumns) {
                 ForEach(Array(sortedPosts.enumerated()), id: \.element.id) { i, post in
                     PostPreviewFrame(post: post, search: searchTag)
                     .contextMenu {
@@ -96,7 +90,7 @@ struct FavoritesView: View {
         .refreshable {
             page = 1;
             posts = await fetchRecentPosts(page, limit, searchTag);
-            prefetchThumbnails();
+            prefetchThumbnails(for: posts);
         }
     }
 
@@ -114,7 +108,7 @@ struct FavoritesView: View {
         if posts.count == 0 {
             infoText = "No favorites found";
         }
-        prefetchThumbnails();
+        prefetchThumbnails(for: posts);
     }
 
     func loadMorePosts() async {
@@ -123,11 +117,7 @@ struct FavoritesView: View {
         page += 1;
         posts += await fetchRecentPosts(page, limit, searchTag);
         isLoading = false;
-        prefetchThumbnails();
+        prefetchThumbnails(for: posts);
     }
 
-    func prefetchThumbnails() {
-        let prefetchURLs = posts.compactMap { URL(string: $0.preview.url ?? "") };
-        ImagePrefetcher(urls: prefetchURLs).start();
-    }
 }

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Kingfisher
 import os.log
 
 let userAgent: String = "Tanukis%20Stash/1.0.0%20(by%20ProbablyOllie%20on%20e621)";
@@ -24,8 +25,8 @@ extension URLResponse {
 }
 
 func login() async -> Bool {
-    let username = UserDefaults.standard.string(forKey: "username") ?? "";
-    let API_KEY = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     if username.isEmpty || API_KEY.isEmpty {
         return false;
     }
@@ -81,7 +82,7 @@ func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool 
 }
 
 func fetchUserData() async -> UserData? {
-    let username = UserDefaults.standard.string(forKey: "username") ?? "";
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     let url = "/users/\(username).json"
     do {
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
@@ -95,7 +96,7 @@ func fetchUserData() async -> UserData? {
 }
 
 func fetchBlacklist() async -> String {
-    let authenticated = UserDefaults.standard.bool(forKey: "AUTHENTICATED");
+    let authenticated = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     if (!authenticated) {
         os_log("Not authenticated, skipping blacklist update", log: .default);
         return "No Auth";
@@ -141,6 +142,13 @@ func isSingleTagQuery(_ query: String) -> Bool {
     if trimmed.contains(":") { return false; }
     if trimmed.contains("*") { return false; }
     return true;
+}
+
+func replaceLastSearchWord(in search: String, with tag: String) -> String {
+    if search.contains(" "), let index = search.lastIndex(of: " ") {
+        return search[...index].trimmingCharacters(in: .whitespaces) + " " + tag;
+    }
+    return tag;
 }
 
 func parseSearch(_ searchText: String) -> String {
@@ -207,7 +215,7 @@ func fetchComments(postId: Int) async -> [CommentContent] {
 
 func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostContent] {
     do {
-        let username = UserDefaults.standard.string(forKey: "username") ?? "";
+        let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
         let encoded = tags.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
         let url: String;
 
@@ -229,8 +237,8 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
         var filteredPosts = parsedData.posts.filter { $0.preview.url != nil };
 
         // If the blacklist is enabled, filter out blacklisted posts
-        if (UserDefaults.standard.bool(forKey: "ENABLE_BLACKLIST")) {
-            let blacklistedTags = UserDefaults.standard.string(forKey: "USER_BLACKLIST") ?? "";
+        if (UserDefaults.standard.bool(forKey: UDKey.enableBlacklist)) {
+            let blacklistedTags = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
             guard blacklistedTags != "No Auth" && blacklistedTags != "Bad usrdata" else {
                 return filteredPosts;
             }
@@ -366,10 +374,15 @@ func fetchTagCategories(names: [String]) async -> [String: Int] {
     }
 }
 
+func prefetchThumbnails(for posts: [PostContent]) {
+    let urls = posts.compactMap { URL(string: $0.preview.url ?? "") };
+    ImagePrefetcher(urls: urls).start();
+}
+
 func makeRequest(destination: String, method: String, body: Data?, contentType: String) async -> Data? {
-    let domain = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net";
-    let API_KEY = UserDefaults.standard.string(forKey: "API_KEY") ?? "";
-    let username = UserDefaults.standard.string(forKey: "username") ?? "";
+    let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     let AUTH_STRING: String = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";
     let url = URL(string: "https://\(domain)\(destination)")
 

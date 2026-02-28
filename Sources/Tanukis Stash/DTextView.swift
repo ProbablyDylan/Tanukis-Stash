@@ -10,7 +10,7 @@ struct DTextView: View {
     @State private var revealedSpoilers: Set<Int> = []
     @State private var blocks: [DTextBlock] = []
 
-    private let domain = UserDefaults.standard.string(forKey: "api_source") ?? "e926.net"
+    private let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

@@ -63,7 +63,7 @@ func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
 }
 
 func tagCacheSyncIfNeeded() async {
-    let lastSync = UserDefaults.standard.double(forKey: "TAG_CACHE_LAST_SYNC");
+    let lastSync = UserDefaults.standard.double(forKey: UDKey.tagCacheLastSync);
     let now = Date().timeIntervalSince1970;
     if now - lastSync < 86400 && isTagCachePopulated() { return; }
 
@@ -119,7 +119,7 @@ func tagCacheSyncIfNeeded() async {
             }
         }
 
-        UserDefaults.standard.set(now, forKey: "TAG_CACHE_LAST_SYNC");
+        UserDefaults.standard.set(now, forKey: UDKey.tagCacheLastSync);
         os_log("Tag cache synced with %{public}d tags", log: .default, lines.count - 1);
     } catch {
         os_log("Tag cache sync failed: %{public}s", log: .default, error.localizedDescription);

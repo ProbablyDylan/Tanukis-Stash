@@ -21,9 +21,9 @@ struct ContentView: View {
     init() {
         Task.init {
             let loginStatus = await login();
-            UserDefaults.standard.set(loginStatus, forKey: "AUTHENTICATED");
+            UserDefaults.standard.set(loginStatus, forKey: UDKey.authenticated);
             if (loginStatus) {
-                UserDefaults.standard.set(await fetchBlacklist().trimmingCharacters(in: .whitespacesAndNewlines), forKey: "USER_BLACKLIST");
+                UserDefaults.standard.set(await fetchBlacklist().trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.userBlacklist);
             }
             await tagCacheSyncIfNeeded();
         }
