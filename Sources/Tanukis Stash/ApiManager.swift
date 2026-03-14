@@ -81,18 +81,19 @@ func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool 
     return areTagsBlacklisted(blacklistedArray: blacklistedArray, postTags: allPostTags)
 }
 
-func fetchUserData() async -> UserData? {
-    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
-    let url = "/users/\(username).json"
+func fetchJSON<T: Decodable>(_ endpoint: String, logLabel: String) async -> T? {
     do {
-        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-        if (data) == nil { return nil; }
-        let userData = try JSONDecoder().decode(UserData.self, from: data!);
-        return userData;
+        guard let data = await makeRequest(destination: endpoint, method: "GET", body: nil, contentType: "application/json") else { return nil; }
+        return try JSONDecoder().decode(T.self, from: data);
     } catch {
-        os_log("Error fetching user data: %{public}s", log: .default, error.localizedDescription);
+        os_log("Error fetching %{public}s: %{public}s", log: .default, logLabel, error.localizedDescription);
         return nil;
     }
+}
+
+func fetchUserData() async -> UserData? {
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
+    return await fetchJSON("/users/\(username).json", logLabel: "user data");
 }
 
 func fetchBlacklist() async -> String {
@@ -162,6 +163,24 @@ func parseSearch(_ searchText: String) -> String {
     else { return searchText; }
 }
 
+@MainActor func debouncedTagSuggestion(
+    query: String,
+    task: inout Task<Void, Never>?,
+    results: Binding<[TagSuggestion]>
+) {
+    task?.cancel();
+    guard query.count >= 3 else {
+        results.wrappedValue = [];
+        return;
+    }
+    task = Task {
+        try? await Task.sleep(for: .milliseconds(150));
+        if !Task.isCancelled {
+            results.wrappedValue = await createTagList(query);
+        }
+    };
+}
+
 func createTagList(_ search: String) async -> [TagSuggestion] {
     let newSearchText = parseSearch(search);
     if(newSearchText.count >= 3) {
@@ -175,42 +194,20 @@ func createTagList(_ search: String) async -> [TagSuggestion] {
 }
 
 func getPost(postId: Int) async -> PostContent? {
-    let url = "/posts/\(postId).json"
-    do {
-        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-        if (data) == nil { return nil; }
-        let post: Post = try JSONDecoder().decode(Post.self, from: data!);
-        // If the blacklist is enabled, check if the post is blacklisted
-        return post.post;
-    } catch {
-        os_log("Error fetching post %{public}d: %{public}s", log: .default, postId, error.localizedDescription);
-        return nil;
-    }
+    let post: Post? = await fetchJSON("/posts/\(postId).json", logLabel: "post \(postId)");
+    return post?.post;
 }
 
 func fetchPool(poolId: Int) async -> PoolContent? {
-    let url = "/pools/\(poolId).json";
-    do {
-        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-        if (data) == nil { return nil; }
-        let pool = try JSONDecoder().decode(PoolContent.self, from: data!);
-        return pool;
-    } catch {
-        os_log("Error fetching pool %{public}d: %{public}s", log: .default, poolId, error.localizedDescription);
-        return nil;
-    }
+    return await fetchJSON("/pools/\(poolId).json", logLabel: "pool \(poolId)");
 }
 
 func fetchComments(postId: Int) async -> [CommentContent] {
-    let url = "/comments.json?group_by=comment&search%5Bpost_id%5D=\(postId)&limit=75";
-    do {
-        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return []; }
-        let comments = try JSONDecoder().decode([CommentContent].self, from: data);
-        return comments.filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
-    } catch {
-        os_log("Error fetching comments for post %{public}d: %{public}s", log: .default, postId, error.localizedDescription);
-        return [];
-    }
+    let comments: [CommentContent]? = await fetchJSON(
+        "/comments.json?group_by=comment&search%5Bpost_id%5D=\(postId)&limit=75",
+        logLabel: "comments for post \(postId)"
+    );
+    return (comments ?? []).filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
 }
 
 func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostContent] {
@@ -298,41 +295,22 @@ func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
 
 func fetchWikiPage(tagName: String) async -> WikiPage? {
     let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tagName;
-    let url = "/wiki_pages/\(encoded).json";
-    do {
-        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return nil; }
-        let wiki = try JSONDecoder().decode(WikiPage.self, from: data);
-        return wiki;
-    } catch {
-        os_log("Error fetching wiki page for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
-        return nil;
-    }
+    return await fetchJSON("/wiki_pages/\(encoded).json", logLabel: "wiki page for \(tagName)");
 }
 
 func fetchTagDetail(tagName: String) async -> TagDetail? {
     let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
-    let url = "/tags.json?search%5Bname_matches%5D=\(encoded)";
-    do {
-        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return nil; }
-        let tags = try JSONDecoder().decode([TagDetail].self, from: data);
-        return tags.first;
-    } catch {
-        os_log("Error fetching tag detail for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
-        return nil;
-    }
+    let tags: [TagDetail]? = await fetchJSON("/tags.json?search%5Bname_matches%5D=\(encoded)", logLabel: "tag detail for \(tagName)");
+    return tags?.first;
 }
 
 func fetchTagAliases(tagName: String) async -> [TagAlias] {
     let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
-    let url = "/tag_aliases.json?search%5Bconsequent_name%5D=\(encoded)&search%5Bstatus%5D=active";
-    do {
-        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return []; }
-        let aliases = try JSONDecoder().decode([TagAlias].self, from: data);
-        return aliases;
-    } catch {
-        os_log("Error fetching tag aliases for %{public}s: %{public}s", log: .default, tagName, error.localizedDescription);
-        return [];
-    }
+    let aliases: [TagAlias]? = await fetchJSON(
+        "/tag_aliases.json?search%5Bconsequent_name%5D=\(encoded)&search%5Bstatus%5D=active",
+        logLabel: "tag aliases for \(tagName)"
+    );
+    return aliases ?? [];
 }
 
 func parseRelatedTags(_ relatedTags: String?) -> [String] {
@@ -361,17 +339,10 @@ func fetchTagCategories(names: [String]) async -> [String: Int] {
     guard !names.isEmpty else { return [:]; }
     let joined = names.joined(separator: ",");
     let encoded = joined.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? joined;
-    let url = "/tags.json?search%5Bname%5D=\(encoded)&limit=\(names.count)";
-    do {
-        guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else { return [:]; }
-        let tags = try JSONDecoder().decode([TagDetail].self, from: data);
-        var map = [String: Int]();
-        for tag in tags { map[tag.name] = tag.category; }
-        return map;
-    } catch {
-        os_log("Error fetching tag categories: %{public}s", log: .default, error.localizedDescription);
-        return [:];
-    }
+    let tags: [TagDetail]? = await fetchJSON("/tags.json?search%5Bname%5D=\(encoded)&limit=\(names.count)", logLabel: "tag categories");
+    var map = [String: Int]();
+    for tag in tags ?? [] { map[tag.name] = tag.category; }
+    return map;
 }
 
 func prefetchThumbnails(for posts: [PostContent]) {

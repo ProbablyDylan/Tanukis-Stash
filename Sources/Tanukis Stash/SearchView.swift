@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Kingfisher
 
 struct SearchView: View {
     @State var posts = [PostContent]();
@@ -37,19 +36,9 @@ struct SearchView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            LazyVGrid(columns: postGridColumns) {
-                ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
-                    PostPreviewFrame(post: post, search: search)
-                    .onAppear {
-                        if (i == posts.count - 18) {
-                            Task.init {
-                                await getPosts(append: true);
-                            }
-                        }
-                    }
-                }
+            PaginatedPostGrid(posts: posts, search: activeSearch) {
+                await getPosts(append: true);
             }
-            .padding(10)
         }
         .task({
             if (posts.count == 0) {
@@ -105,19 +94,15 @@ struct SearchView: View {
         }
         .onChange(of: search) {
             if search.isEmpty && !activeSearch.isEmpty {
+                suggestionTask?.cancel();
+                searchSuggestions = [];
                 activeSearch = "";
                 posts = [];
                 Task {
                     await getPosts(append: false);
                 }
-            } else if(search.count >= 3) {
-                suggestionTask?.cancel();
-                suggestionTask = Task {
-                    try? await Task.sleep(for: .milliseconds(150));
-                    if !Task.isCancelled {
-                        searchSuggestions = await createTagList(search);
-                    }
-                };
+            } else {
+                debouncedTagSuggestion(query: search, task: &suggestionTask, results: $searchSuggestions);
             }
         }
         .onSubmit(of: .search) {
@@ -166,52 +151,10 @@ struct SearchView: View {
 struct PostPreviewFrame: View {
     let post: PostContent;
     let search: String;
-    
+
     var body: some View {
-        
         NavigationLink(destination: PostView(post: post, search: search)) {
-            ZStack {
-                if(post.preview.url != nil) {
-                    KFImage(URL(string: post.preview.url!))
-                        .placeholder {
-                            ProgressView()
-                                .frame(minWidth: 0, maxWidth: .infinity)
-                                .frame(width: 100, height: 150)
-                        }
-                        .resizable()
-                        .scaledToFill()
-                        .clipped()
-                        .frame(minWidth: 0, maxWidth: .infinity)
-                        .frame(height: 150)
-                        .shadow(color: Color.primary.opacity(0.3), radius: 1)
-                }
-                else {
-                    Text("Deleted")
-                        .frame(minWidth: 0, maxWidth: .infinity)
-                        .frame(height: 150)
-                        .background(Color.gray.opacity(0.90))
-                }
-                VStack() {
-                    Spacer()
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.up")
-                        Text(post.score.total.formatted(.number.notation(.compactName)))
-                        Image(systemName: "heart.fill")
-                            .padding(.leading, 1)
-                        Text(post.fav_count.formatted(.number.notation(.compactName)))
-                        Image(systemName: "bubble.right")
-                            .padding(.leading, 1)
-                        Text(post.comment_count.formatted(.number.notation(.compactName)))
-                    }
-                    .font(.system(size: 10))
-                    .fontWeight(.bold)
-                    .foregroundColor(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(5.0)
-                    .background(Color.gray.opacity(0.50))
-                }
-            }.cornerRadius(10)
-            .padding(0.1)
+            PostGridCell(post: post)
         }
     }
 }

@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import Kingfisher
 
 enum FavoriteSortOption: String, CaseIterable {
     case newest = "Newest"
@@ -44,9 +43,8 @@ struct FavoritesView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            LazyVGrid(columns: postGridColumns) {
-                ForEach(Array(sortedPosts.enumerated()), id: \.element.id) { i, post in
-                    PostPreviewFrame(post: post, search: searchTag)
+            PaginatedPostGrid(posts: sortedPosts, loadMore: loadMorePosts) { _, post in
+                PostPreviewFrame(post: post, search: searchTag)
                     .contextMenu {
                         Button(role: .destructive) {
                             Task {
@@ -56,16 +54,7 @@ struct FavoritesView: View {
                             Label("Unfavorite", systemImage: "heart.slash")
                         }
                     }
-                    .onAppear {
-                        if i >= posts.count - 18 {
-                            Task {
-                                await loadMorePosts()
-                            }
-                        }
-                    }
-                }
             }
-            .padding(10)
         }
         .task {
             if posts.count == 0 {

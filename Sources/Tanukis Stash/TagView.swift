@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import Kingfisher
 
 struct TagView: View {
     let tagName: String;
@@ -98,19 +97,9 @@ struct TagView: View {
                     .padding(.vertical, 20)
             }
 
-            LazyVGrid(columns: postGridColumns) {
-                ForEach(Array(posts.enumerated()), id: \.element) { i, post in
-                    PostPreviewFrame(post: post, search: tagName)
-                    .onAppear {
-                        if i == posts.count - 18 {
-                            Task {
-                                await loadMorePosts();
-                            }
-                        }
-                    }
-                }
+            PaginatedPostGrid(posts: posts, search: tagName) {
+                await loadMorePosts();
             }
-            .padding(10)
         }
         .task {
             async let wikiFetch = fetchWikiPage(tagName: tagName);
@@ -169,15 +158,7 @@ struct TagView: View {
                     }
                 }
                 .onChange(of: search) {
-                    if search.count >= 3 {
-                        suggestionTask?.cancel();
-                        suggestionTask = Task {
-                            try? await Task.sleep(for: .milliseconds(150));
-                            if !Task.isCancelled {
-                                searchSuggestions = await createTagList(search);
-                            }
-                        };
-                    }
+                    debouncedTagSuggestion(query: search, task: &suggestionTask, results: $searchSuggestions);
                 }
                 .onSubmit(of: .search) {
                     let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines);

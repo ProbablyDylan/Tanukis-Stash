@@ -82,17 +82,7 @@ struct SettingsView: View {
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
                                 .onChange(of: newBlacklistTag) {
-                                    suggestionTask?.cancel();
-                                    if newBlacklistTag.count >= 3 {
-                                        suggestionTask = Task {
-                                            try? await Task.sleep(for: .milliseconds(150));
-                                            if !Task.isCancelled {
-                                                tagSuggestions = await createTagList(newBlacklistTag);
-                                            }
-                                        };
-                                    } else {
-                                        tagSuggestions = [];
-                                    }
+                                    debouncedTagSuggestion(query: newBlacklistTag, task: &suggestionTask, results: $tagSuggestions);
                                 }
                                 .onSubmit {
                                     addBlacklistEntry();
