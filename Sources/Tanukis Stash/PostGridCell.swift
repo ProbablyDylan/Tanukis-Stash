@@ -28,12 +28,12 @@ struct PostGridCell: View {
             VStack {
                 Spacer()
                 HStack(spacing: 2) {
-                    Image(systemName: "arrow.up")
+                    Image(systemName: "arrowshape.up.fill")
                     Text(post.score.total.formatted(.number.notation(.compactName)))
                     Image(systemName: "heart.fill")
                         .padding(.leading, 1)
                     Text(post.fav_count.formatted(.number.notation(.compactName)))
-                    Image(systemName: "bubble.right")
+                    Image(systemName: "bubble.fill")
                         .padding(.leading, 1)
                     Text(post.comment_count.formatted(.number.notation(.compactName)))
                 }

@@ -20,7 +20,7 @@ struct PostMetadataBar: View {
                         Text("\(post.fav_count)")
                     }
                     HStack(spacing: 4) {
-                        Image(systemName: "bubble.right")
+                        Image(systemName: "bubble.fill")
                         Text("\(post.comment_count)")
                     }
                 }
