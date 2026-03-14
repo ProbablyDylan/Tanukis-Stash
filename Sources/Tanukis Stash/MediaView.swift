@@ -32,20 +32,20 @@ struct MediaView: View {
 struct ImageView: View {
 
     let post: PostContent;
+    @State private var fullImageLoaded = false;
 
     var body: some View {
-        KFImage(URL(string: post.file.url!))
-            .placeholder {
-                ZStack {
-                    KFImage(URL(string: post.preview.url!))
-                        .resizable()
-                        .opacity(0.25)
-                        .scaledToFit()
-                    ProgressView()
-                }
+        ZStack {
+            if !fullImageLoaded {
+                KFImage(URL(string: post.preview.url!))
+                    .resizable()
+                    .scaledToFit()
             }
-            .fade(duration: 0.25)
-            .resizable()
+            KFImage(URL(string: post.file.url!))
+                .onSuccess { _ in fullImageLoaded = true; }
+                .resizable()
+                .scaledToFit()
+        }
     }
 }
 
