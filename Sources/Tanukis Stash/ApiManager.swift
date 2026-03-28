@@ -30,8 +30,8 @@ func login() async -> Bool {
     if username.isEmpty || API_KEY.isEmpty {
         return false;
     }
-    let testFavorites = await fetchRecentPosts(1, 1, "fav:\(username)");
-    if testFavorites.isEmpty {
+    let userData = await fetchUserData();
+    if userData == nil {
         os_log("Login failed for %{public}s", log: .default, username);
         return false;
     }
@@ -123,8 +123,8 @@ func updateBlacklist(tags: String) async -> Bool {
 
 func fetchTags(_ text: String) async -> [TagSuggestion] {
     do {
-        let encoded: String? = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-        let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded!)&expiry=7&_client=\(userAgent)"
+        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? text;
+        let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded)&expiry=7&_client=\(userAgent)";
 
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
         if (data) == nil { return []; }
@@ -260,8 +260,8 @@ func favoritePost(postId: Int) async -> Bool {
 func unFavoritePost(postId: Int) async -> Bool {
     let url = "/favorites/\(postId).json"
     let data = await makeRequest(destination: url, method: "DELETE", body: nil, contentType: "application/json");
-    if (data) == nil { return true; }
-    return false;
+    if data == nil { return false; }
+    return true;
 }
 
 func getVote(postId: Int) async -> Int {
@@ -355,9 +355,11 @@ func makeRequest(destination: String, method: String, body: Data?, contentType: 
     let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     let AUTH_STRING: String = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";
-    let url = URL(string: "https://\(domain)\(destination)")
-
-    var request = URLRequest(url: url!)
+    guard let url = URL(string: "https://\(domain)\(destination)") else {
+        os_log("makeRequest: invalid URL for destination %{public}s", log: .default, destination);
+        return nil;
+    }
+    var request = URLRequest(url: url)
     request.httpMethod = method
     request.addValue(contentType, forHTTPHeaderField: "Content-Type")
     request.addValue(userAgent, forHTTPHeaderField: "User-Agent")
@@ -371,8 +373,13 @@ func makeRequest(destination: String, method: String, body: Data?, contentType: 
             request.httpBody = body!
         }
         let (data, response) = try await URLSession.shared.data(for: request);
-        
-        os_log("HTTP %{public}s %{public}d https://%{public}s%{public}s", log: .default, method, response.getStatusCode() ?? -1, domain, destination)
+
+        let statusCode = response.getStatusCode() ?? -1;
+        os_log("HTTP %{public}s %{public}d https://%{public}s%{public}s", log: .default, method, statusCode, domain, destination);
+        guard (200..<300).contains(statusCode) else {
+            os_log("HTTP error %{public}d for %{public}s", log: .default, statusCode, destination);
+            return nil;
+        }
         return data;
     } catch {
         DispatchQueue.main.async {
