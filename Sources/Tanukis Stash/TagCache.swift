@@ -75,7 +75,8 @@ func tagCacheSyncIfNeeded() async {
 
     var csvData: Data?;
     for dateStr in [today, yesterday] {
-        let urlStr = "https://e621.net/db_export/tags-\(dateStr).csv.gz";
+        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+        let urlStr = "https://\(domain)/db_export/tags-\(dateStr).csv.gz";
         guard let url = URL(string: urlStr) else { continue; }
         var request = URLRequest(url: url);
         request.addValue(userAgent.removingPercentEncoding ?? userAgent, forHTTPHeaderField: "User-Agent");

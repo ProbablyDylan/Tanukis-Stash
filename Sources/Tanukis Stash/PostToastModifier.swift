@@ -3,6 +3,7 @@ import AlertToast
 
 struct PostToastModifier: ViewModifier {
     @Binding var displayToastType: Int;
+    @State private var clearTask: Task<Void, Never>?;
 
     func body(content: Content) -> some View {
         content
@@ -18,12 +19,14 @@ struct PostToastModifier: ViewModifier {
     }
 
     private func clearToast() {
+        clearTask?.cancel();
         let current = displayToastType;
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            if current == displayToastType {
+        clearTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2));
+            if !Task.isCancelled && current == displayToastType {
                 displayToastType = 0;
             }
-        }
+        };
     }
 
     private func toastForType() -> AlertToast {

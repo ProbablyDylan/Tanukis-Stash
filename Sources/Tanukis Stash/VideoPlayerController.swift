@@ -2,15 +2,15 @@ import SwiftUI
 import AVKit
  
 struct VideoPlayerController: UIViewControllerRepresentable {
-    @State private var ENABLE_AIRPLAY = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     var videoURL: URL
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default);
         try? AVAudioSession.sharedInstance().setActive(true);
 
-        let player = AVPlayer(url: videoURL)
-        player.allowsExternalPlayback = ENABLE_AIRPLAY;
+        let enableAirplay = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
+        let player = AVPlayer(url: videoURL);
+        player.allowsExternalPlayback = enableAirplay;
         let playerViewController = AVPlayerViewController();
 
         playerViewController.player = player;
