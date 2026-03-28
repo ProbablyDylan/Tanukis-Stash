@@ -25,14 +25,14 @@ enum DTextBlock: Identifiable {
         switch self {
         case .paragraph(let inlines): return "p-\(inlines.hashDescription)"
         case .heading(let level, _, let content): return "h\(level)-\(content.hashDescription)"
-        case .quote(let attr, _): return "quote-\(attr ?? "anon")-\(UUID().uuidString.prefix(6))"
+        case .quote(let attr, let children): return "quote-\(attr ?? "anon")-\(children.count)"
         case .codeBlock(let s): return "code-\(s.hashValue)"
         case .spoilerBlock(let id, _): return "spoiler-\(id)"
-        case .section(let title, _): return "section-\(title ?? "untitled")-\(UUID().uuidString.prefix(6))"
-        case .list(let items): return "list-\(items.count)-\(UUID().uuidString.prefix(6))"
-        case .table(let rows): return "table-\(rows.count)-\(UUID().uuidString.prefix(6))"
-        case .horizontalRule: return "hr-\(UUID().uuidString.prefix(6))"
-        case .lineBreak: return "br-\(UUID().uuidString.prefix(6))"
+        case .section(let title, let children): return "section-\(title ?? "untitled")-\(children.count)"
+        case .list(let items): return "list-\(items.count)-\(items.hashDescription)"
+        case .table(let rows): return "table-\(rows.count)-\(rows.hashDescription)"
+        case .horizontalRule: return "hr"
+        case .lineBreak: return "br"
         case .nodtext(let s): return "nodtext-\(s.hashValue)"
         case .thumbEmbed(let id): return "thumb-\(id)"
         }
@@ -107,5 +107,17 @@ extension Array where Element == DTextInline {
             case .searchLink(_, let display): return display ?? ""
             }
         }.joined()
+    }
+}
+
+extension Array where Element == DTextListItem {
+    var hashDescription: String {
+        String(describing: self.map { $0.content.plainText }).hashValue.description
+    }
+}
+
+extension Array where Element == DTextTableRow {
+    var hashDescription: String {
+        String(describing: self.map { $0.cells.count }).hashValue.description
     }
 }

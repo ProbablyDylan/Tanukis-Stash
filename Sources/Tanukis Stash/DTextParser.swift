@@ -170,21 +170,19 @@ struct DTextParser {
 
         while !remaining.isEmpty && depth > 0 {
             let line = consumeLine(&remaining)
-            let lower = line.lowercased()
 
-            // Count nested opens and closes
-            var searchStart = lower.startIndex
-            while let openRange = lower.range(of: openTag, range: searchStart..<lower.endIndex) {
+            // Count nested opens and closes using case-insensitive search on original string
+            var searchStart = line.startIndex
+            while let openRange = line.range(of: openTag, options: .caseInsensitive, range: searchStart..<line.endIndex) {
                 depth += 1
                 searchStart = openRange.upperBound
             }
 
-            searchStart = lower.startIndex
-            while let closeRange = lower.range(of: closeTag, range: searchStart..<lower.endIndex) {
+            searchStart = line.startIndex
+            while let closeRange = line.range(of: closeTag, options: .caseInsensitive, range: searchStart..<line.endIndex) {
                 depth -= 1
                 if depth == 0 {
-                    // Grab content before the closing tag
-                    let beforeClose = String(line[line.startIndex..<line.index(line.startIndex, offsetBy: line.distance(from: line.startIndex, to: closeRange.lowerBound))])
+                    let beforeClose = String(line[line.startIndex..<closeRange.lowerBound])
                     if !content.isEmpty { content += "\n" }
                     content += beforeClose
                     return content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -463,12 +461,12 @@ struct DTextParser {
         }
 
         // [color=...]...[/color]
-        if let match = sub.lowercased().firstMatch(of: /^\[color=([^\]]+)\]/) {
-            let colorName = String(input[input.index(pos, offsetBy: 7)..<input.index(pos, offsetBy: 7 + match.1.count)])
-            let afterOpen = input.index(pos, offsetBy: 8 + match.1.count) // [color=X]
+        if let match = sub.firstMatch(of: /(?i)^\[color=([^\]]+)\]/) {
+            let colorName = String(match.1);
+            let afterOpen = match.range.upperBound;
             if let closeRange = input.range(of: "[/color]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                let inner = String(input[afterOpen..<closeRange.lowerBound])
-                let children = parseInlines(inner)
+                let inner = String(input[afterOpen..<closeRange.lowerBound]);
+                let children = parseInlines(inner);
                 return (.color(colorName, children), closeRange.upperBound)
             }
         }
@@ -485,12 +483,12 @@ struct DTextParser {
         }
 
         // [url=...]...[/url]
-        if let match = sub.lowercased().firstMatch(of: /^\[url=([^\]]+)\]/) {
-            let urlStr = String(input[input.index(pos, offsetBy: 5)..<input.index(pos, offsetBy: 5 + match.1.count)])
-            let afterOpen = input.index(pos, offsetBy: 6 + match.1.count) // [url=X]
+        if let match = sub.firstMatch(of: /(?i)^\[url=([^\]]+)\]/) {
+            let urlStr = String(match.1);
+            let afterOpen = match.range.upperBound;
             if let closeRange = input.range(of: "[/url]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                let inner = String(input[afterOpen..<closeRange.lowerBound])
-                let children = parseInlines(inner)
+                let inner = String(input[afterOpen..<closeRange.lowerBound]);
+                let children = parseInlines(inner);
                 return (.link(DTextLink(url: urlStr, display: children)), closeRange.upperBound)
             }
         }
