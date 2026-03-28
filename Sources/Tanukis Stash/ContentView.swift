@@ -18,20 +18,17 @@ struct ContentView: View {
     @State private var showTagView = false
     @State private var loadingPostId: Int?
 
-    init() {
-        Task.init {
-            let loginStatus = await login();
-            UserDefaults.standard.set(loginStatus, forKey: UDKey.authenticated);
-            if (loginStatus) {
-                UserDefaults.standard.set(await fetchBlacklist().trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.userBlacklist);
-            }
-            await tagCacheSyncIfNeeded();
-        }
-    }
-
     var body: some View {
         NavigationStack {
             SearchView(search: "")
+                .task {
+                    let loginStatus = await login();
+                    UserDefaults.standard.set(loginStatus, forKey: UDKey.authenticated);
+                    if (loginStatus) {
+                        UserDefaults.standard.set(await fetchBlacklist().trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.userBlacklist);
+                    }
+                    await tagCacheSyncIfNeeded();
+                }
                 .navigationDestination(isPresented: $showPostView) {
                     if let post = navigateToPost {
                         PostView(post: post, search: "")

@@ -47,7 +47,8 @@ struct SearchView: View {
         })
         .refreshable {
             page = 1;
-            posts = await fetchRecentPosts(page, limit, search)
+            posts = await fetchRecentPosts(page, limit, activeSearch);
+            prefetchThumbnails(for: posts);
         }
     }
 
@@ -127,11 +128,11 @@ struct SearchView: View {
         let newPosts: [PostContent];
         if(append) {
             page += 1;
-            newPosts = await fetchRecentPosts(page, limit, search);
+            newPosts = await fetchRecentPosts(page, limit, activeSearch);
             posts += newPosts;
         } else {
             page = 1;
-            newPosts = await fetchRecentPosts(page, limit, search);
+            newPosts = await fetchRecentPosts(page, limit, activeSearch);
             posts = newPosts;
         }
 

@@ -14,7 +14,7 @@ struct PoolView: View {
         self.poolId = poolId;
         _pool = State(initialValue: pool);
         _posts = State(initialValue: initialPosts);
-        _isLoading = State(initialValue: !initialPosts.isEmpty);
+        _isLoading = State(initialValue: initialPosts.isEmpty);
     }
 
     // Pool & post data
