@@ -54,7 +54,12 @@ struct GIFView: View {
     let post: PostContent;
 
     var body: some View {
-        AnimatedGifView(url: URL(string: post.file.url!)!)
+        if let urlString = post.file.url, let url = URL(string: urlString) {
+            AnimatedGifView(url: url)
+        } else {
+            Text("Failed to load GIF")
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
