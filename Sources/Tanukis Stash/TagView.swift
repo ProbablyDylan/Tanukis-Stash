@@ -25,6 +25,7 @@ struct TagView: View {
     @State private var suggestionTask: Task<Void, Never>?;
     @State private var navigateToTagName: String?;
     @State private var navigateToSearch: String?;
+    @State private var scrolledPostID: Int?;
     @Environment(\.dismissSearch) private var dismissSearch;
 
     var limit = 75;
@@ -35,7 +36,7 @@ struct TagView: View {
     var tagContent: some View {
         ScrollView(.vertical) {
             if let wiki = wiki, !wiki.body.isEmpty {
-                DisclosureGroup(isExpanded: $wikiExpanded) {
+                DisclosureGroup(isExpanded: $wikiExpanded.animation(.smooth)) {
                     DTextView(text: wiki.body)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } label: {
@@ -66,6 +67,7 @@ struct TagView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(Color.primary)
                 }
+                .animation(.smooth, value: aliases.isEmpty)
                 .padding(10)
             }
 
@@ -88,6 +90,7 @@ struct TagView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(Color.primary)
                 }
+                .animation(.smooth, value: relatedTags.isEmpty)
                 .padding(10)
             }
 
@@ -101,6 +104,7 @@ struct TagView: View {
                 await loadMorePosts();
             }
         }
+        .scrollPosition(id: $scrolledPostID)
         .task {
             async let wikiFetch = fetchWikiPage(tagName: tagName);
             async let detailFetch = fetchTagDetail(tagName: tagName);

@@ -26,6 +26,7 @@ struct PaginatedPostGrid<CellContent: View>: View {
                     }
             }
         }
+        .scrollTargetLayout()
         .padding(10)
     }
 }

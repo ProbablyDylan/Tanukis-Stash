@@ -18,6 +18,7 @@ struct FavoritesView: View {
     @State private var isLoading: Bool = false;
     @State private var infoText: String = "Loading favorites...";
     @State private var sortOption: FavoriteSortOption = .newest;
+    @State private var scrolledPostID: Int?;
 
     private var searchTag: String {
         "fav:\(UserDefaults.standard.string(forKey: UDKey.username) ?? "")"
@@ -56,6 +57,7 @@ struct FavoritesView: View {
                     }
             }
         }
+        .scrollPosition(id: $scrolledPostID)
         .task {
             if posts.count == 0 {
                 await loadPosts()

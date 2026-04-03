@@ -20,6 +20,7 @@ struct SearchView: View {
 
     @State private var navigateToTagName: String?;
     @State var infoText: String = ""
+    @State private var scrolledPostID: Int?;
 
     var limit = 75;
     var loadingText = "Loading posts...";
@@ -40,6 +41,7 @@ struct SearchView: View {
                 await getPosts(append: true);
             }
         }
+        .scrollPosition(id: $scrolledPostID)
         .task({
             if (posts.count == 0) {
                 await getPosts(append: false);
