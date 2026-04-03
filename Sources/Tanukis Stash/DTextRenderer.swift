@@ -115,6 +115,15 @@ struct DTextBlockView: View {
 
         case .thumbEmbed(let postId):
             DTextThumbEmbed(postId: postId)
+
+        case .thumbRow(let postIds):
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(postIds, id: \.self) { id in
+                        DTextThumbEmbed(postId: id)
+                    }
+                }
+            }
         }
     }
 

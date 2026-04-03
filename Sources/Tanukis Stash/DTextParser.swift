@@ -73,11 +73,19 @@ struct DTextParser {
                 continue
             }
 
-            // thumb #123
-            if let thumbMatch = line.firstMatch(of: /(?i)^thumb\s+#(\d+)\s*$/) {
-                flushParagraph()
-                blocks.append(.thumbEmbed(postId: Int(thumbMatch.1)!))
-                continue
+            // thumb #123 (one or more per line)
+            if line.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("thumb") {
+                let matches = line.matches(of: /(?i)thumb\s+#(\d+)/)
+                if !matches.isEmpty {
+                    flushParagraph()
+                    let postIds = matches.compactMap { Int($0.1) }
+                    if postIds.count == 1 {
+                        blocks.append(.thumbEmbed(postId: postIds[0]))
+                    } else {
+                        blocks.append(.thumbRow(postIds: postIds))
+                    }
+                    continue
+                }
             }
 
             // Block-level tags

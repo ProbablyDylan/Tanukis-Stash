@@ -20,6 +20,7 @@ enum DTextBlock: Identifiable {
     case lineBreak
     case nodtext(String)
     case thumbEmbed(postId: Int)
+    case thumbRow(postIds: [Int])
 
     var id: String {
         switch self {
@@ -35,6 +36,7 @@ enum DTextBlock: Identifiable {
         case .lineBreak: return "br"
         case .nodtext(let s): return "nodtext-\(s.hashValue)"
         case .thumbEmbed(let id): return "thumb-\(id)"
+        case .thumbRow(let ids): return "thumbrow-\(ids.map(String.init).joined(separator: "-"))"
         }
     }
 }
