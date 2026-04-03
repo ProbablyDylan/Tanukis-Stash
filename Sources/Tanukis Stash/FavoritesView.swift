@@ -86,9 +86,11 @@ struct FavoritesView: View {
     }
 
     func unfavorite(post: PostContent) async {
-        let _ = await unFavoritePost(postId: post.id);
-        withAnimation {
-            posts.removeAll { $0.id == post.id }
+        let success = await unFavoritePost(postId: post.id);
+        if success {
+            withAnimation {
+                posts.removeAll { $0.id == post.id }
+            }
         }
     }
 

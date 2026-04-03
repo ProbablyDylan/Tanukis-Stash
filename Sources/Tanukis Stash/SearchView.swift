@@ -21,6 +21,7 @@ struct SearchView: View {
     @State private var navigateToTagName: String?;
     @State var infoText: String = ""
     @State private var scrolledPostID: Int?;
+    @State private var isLoading: Bool = false;
 
     var limit = 75;
     var loadingText = "Loading posts...";
@@ -126,9 +127,11 @@ struct SearchView: View {
     }
     
     func getPosts(append: Bool) async {
+        guard !isLoading else { return; }
+        isLoading = true;
         infoText = loadingText;
         let newPosts: [PostContent];
-        if(append) {
+        if append {
             page += 1;
             newPosts = await fetchRecentPosts(page, limit, activeSearch);
             posts += newPosts;
@@ -138,11 +141,12 @@ struct SearchView: View {
             posts = newPosts;
         }
 
-        if (posts.count == 0) {
-            infoText = noPostsFoundText
+        if posts.count == 0 {
+            infoText = noPostsFoundText;
         }
 
         prefetchThumbnails(for: newPosts);
+        isLoading = false;
     }
     
     func updateSearch(_ tag: String) {
