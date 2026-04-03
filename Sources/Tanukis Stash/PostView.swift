@@ -81,7 +81,14 @@ struct PostView: View {
                 if AUTHENTICATED {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Button {
-                            Task { favorited = favorited ? await unFavoritePost(postId: post.id) : await favoritePost(postId: post.id) }
+                            let wasFavorited = favorited;
+                            favorited = !wasFavorited;
+                            Task {
+                                let success = wasFavorited
+                                    ? await unFavoritePost(postId: post.id)
+                                    : await favoritePost(postId: post.id);
+                                if !success { favorited = wasFavorited; }
+                            }
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
                                 .imageScale(.large)
@@ -116,10 +123,12 @@ struct PostView: View {
                         } label: {
                             Label("Save to Photos", systemImage: "square.and.arrow.down")
                         }
-                        ShareLink(
-                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)")!,
-                            label: { Label("Share Link", systemImage: "link") }
-                        )
+                        if let shareURL = URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)") {
+                            ShareLink(
+                                item: shareURL,
+                                label: { Label("Share Link", systemImage: "link") }
+                            )
+                        }
                         Button {
                             prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType)
                         } label: {
@@ -349,15 +358,17 @@ struct PoolCard: View {
 struct InfoView: View {
     let post: PostContent;
     let search: String;
+    @State private var selectedTag: String?;
+    @State private var selectedSearch: String?;
 
     var body: some View {
         VStack(alignment: .leading) {
-            TagGroup(label: "Character", tags: post.tags.character, search: search, textColor: Color.green)
-            TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple)
-            TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red)
-            TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue)
-            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.orange)
-            TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray)
+            TagGroup(label: "Character", tags: post.tags.character, search: search, textColor: Color.green, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.orange, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
             if (!post.sources.isEmpty) {
                 DisclosureGroup {
                     VStack(alignment: .leading) {
@@ -379,6 +390,12 @@ struct InfoView: View {
             }
             Spacer()
         }
+        .navigationDestination(item: $selectedTag) { tag in
+            TagView(tagName: tag)
+        }
+        .navigationDestination(item: $selectedSearch) { query in
+            SearchView(search: query)
+        }
     }
 }
 
@@ -388,15 +405,17 @@ struct TagGroup: View {
     let tags: [String];
     let search: String;
     let textColor: Color;
-    
+    let onViewTag: (String) -> Void;
+    let onSearchTag: (String) -> Void;
+
     var body: some View {
         if tags.isEmpty {
-            
+
         } else {
             DisclosureGroup {
                 VStack(alignment: .leading) {
                     ForEach(tags, id: \.self) { tag in
-                        Tag(tag: tag, search: search, textColor: textColor)
+                        Tag(tag: tag, search: search, textColor: textColor, onViewTag: onViewTag, onSearchTag: onSearchTag)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             } label: {
@@ -414,18 +433,18 @@ struct Tag: View {
     let tag: String
     let search: String
     let textColor: Color;
-    @State var tagDestination: Bool = false;
-    @State var searchDestination: Bool = false;
+    let onViewTag: (String) -> Void;
+    let onSearchTag: (String) -> Void;
 
     var body: some View {
         Menu {
             Button {
-                tagDestination = true;
+                onViewTag(tag);
             } label: {
                 Text("View Tag")
             }
             Button {
-                searchDestination = true;
+                onSearchTag(search + " " + tag);
             } label: {
                 Text("Add to Current Search")
             }
@@ -435,13 +454,7 @@ struct Tag: View {
                 .foregroundColor(textColor)
                 .multilineTextAlignment(.leading)
         } primaryAction: {
-            tagDestination = true;
-        }
-        .navigationDestination(isPresented: $tagDestination) {
-            TagView(tagName: String(tag))
-        }
-        .navigationDestination(isPresented: $searchDestination) {
-            SearchView(search: String(search + " " + tag))
+            onViewTag(tag);
         }
     }
 }
@@ -509,11 +522,12 @@ struct CommentsView: View {
             }
             .onChange(of: isExpanded) {
                 if isExpanded && !hasFetched {
-                    hasFetched = true;
                     Task {
                         isLoading = true;
-                        comments = await fetchComments(postId: post.id);
+                        let result = await fetchComments(postId: post.id);
+                        comments = result;
                         isLoading = false;
+                        hasFetched = true;
                     }
                 }
             }
