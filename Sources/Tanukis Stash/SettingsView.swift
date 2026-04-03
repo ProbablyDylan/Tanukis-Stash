@@ -16,7 +16,7 @@ struct SettingsView: View {
     @State private var API_KEY: String = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
+    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: UDKey.userIcon) ?? "";
     @State private var blacklistEntries: [String] = [];
@@ -137,9 +137,11 @@ struct SettingsView: View {
                     }
                     .onAppear {
                         Task {
-                            BLACKLIST = await fetchBlacklist();
-                            UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
-                            blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                            if let bl = await fetchBlacklist() {
+                                BLACKLIST = bl;
+                                UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
+                                blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                            }
                         }
                     }
                 }
@@ -193,9 +195,11 @@ struct SettingsView: View {
                 }
             }
             .refreshable {
-                BLACKLIST = await fetchBlacklist();
-                UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
-                blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                if let bl = await fetchBlacklist() {
+                    BLACKLIST = bl;
+                    UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
+                    blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                }
             }
         }
     }
@@ -237,8 +241,6 @@ struct LoginButton: View {
     @Binding var username: String
     @Binding var API_KEY: String
     @State private var ShowAlert: Bool = false;
-    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
-
     var body: some View {
         if (AUTHENTICATED) {
             Button("Logout") {
@@ -255,10 +257,10 @@ struct LoginButton: View {
                     if (!AUTHENTICATED) {
                         ShowAlert.toggle()
                     }
-                    if (AUTHENTICATED) {
-                        // Fetch user data and blacklist if login is successful
-                        BLACKLIST = await fetchBlacklist();
-                        UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
+                    if AUTHENTICATED {
+                        if let bl = await fetchBlacklist() {
+                            UserDefaults.standard.set(bl.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.userBlacklist);
+                        }
                     }
                 }
             }
