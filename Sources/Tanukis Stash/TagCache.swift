@@ -16,11 +16,16 @@ struct CachedTag: Codable, FetchableRecord, PersistableRecord, Sendable {
     let category: Int;
 }
 
+private let _tagDBLock = NSLock();
 private nonisolated(unsafe) var _tagDB: DatabaseQueue?;
 
 func openTagDatabase() throws -> DatabaseQueue {
+    _tagDBLock.lock();
+    defer { _tagDBLock.unlock(); }
     if let db = _tagDB { return db; }
-    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!;
+    guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+        throw CocoaError(.fileNoSuchFile);
+    }
     try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true);
     let dbPath = appSupport.appendingPathComponent("tags.sqlite").path;
     let db = try DatabaseQueue(path: dbPath);
@@ -153,7 +158,9 @@ func decompressGzip(_ data: Data) -> Data? {
     let deflateData = data[offset ..< (data.count - 8)];
 
     // Use streaming decompression to handle arbitrarily large output
-    var stream = compression_stream(dst_ptr: UnsafeMutablePointer<UInt8>(bitPattern: 1)!, dst_size: 0, src_ptr: UnsafeMutablePointer<UInt8>(bitPattern: 1)!, src_size: 0, state: nil);
+    let initBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: 1);
+    defer { initBuf.deallocate(); }
+    var stream = compression_stream(dst_ptr: initBuf, dst_size: 0, src_ptr: initBuf, src_size: 0, state: nil);
     guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) == COMPRESSION_STATUS_OK else {
         return nil;
     }
