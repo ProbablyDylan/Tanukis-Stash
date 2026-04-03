@@ -10,7 +10,7 @@ import SwiftUI
 import Kingfisher
 import os.log
 
-let userAgent: String = "Tanukis%20Stash/1.0.0%20(by%20ProbablyOllie%20on%20e621)";
+let userAgent: String = "Tanukis Stash/1.0.0 (by ProbablyOllie on e621)";
 let log = OSLog.init(subsystem: "dev.jemsoftware.tanukistash", category: "main")
 
 // Thanks Stackoverflow: https://stackoverflow.com/a/45624666
@@ -96,25 +96,26 @@ func fetchUserData() async -> UserData? {
     return await fetchJSON("/users/\(username).json", logLabel: "user data");
 }
 
-func fetchBlacklist() async -> String {
+func fetchBlacklist() async -> String? {
     let authenticated = UserDefaults.standard.bool(forKey: UDKey.authenticated);
-    if (!authenticated) {
+    if !authenticated {
         os_log("Not authenticated, skipping blacklist update", log: .default);
-        return "No Auth";
+        return nil;
     }
     let userdata = await fetchUserData();
-    if (userdata == nil) {
+    guard let userdata = userdata else {
         os_log("Failed to fetch user data", log: .default);
-        return "Bad usrdata";
+        return nil;
     }
-    let data = userdata!.blacklisted_tags ?? "";
-    return data;
+    return userdata.blacklisted_tags ?? "";
 }
 
 func updateBlacklist(tags: String) async -> Bool {
     guard let userData = await fetchUserData() else { return false; }
     let url = "/users/\(userData.id).json";
-    let encoded = tags.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "";
+    var formSafeChars = CharacterSet.urlQueryAllowed;
+    formSafeChars.remove(charactersIn: "&+=");
+    let encoded = tags.addingPercentEncoding(withAllowedCharacters: formSafeChars) ?? "";
     let body = "user[blacklisted_tags]=\(encoded)".data(using: .utf8);
     let data = await makeRequest(destination: url, method: "PATCH", body: body, contentType: "application/x-www-form-urlencoded");
     if data == nil { return false; }
@@ -251,9 +252,10 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
 }
 
 func favoritePost(postId: Int) async -> Bool {
-    let url = "/favorites.json?post_id=\(postId)"
-    let data = await makeRequest(destination: url, method: "POST", body: nil, contentType: "application/json");
-    if (data) == nil { return false; }
+    let url = "/favorites.json";
+    let body = "post_id=\(postId)".data(using: .utf8);
+    let data = await makeRequest(destination: url, method: "POST", body: body, contentType: "application/x-www-form-urlencoded");
+    if data == nil { return false; }
     return true;
 }
 
@@ -265,19 +267,16 @@ func unFavoritePost(postId: Int) async -> Bool {
 }
 
 func getVote(postId: Int) async -> Int {
-    let url = "/posts/\(postId)"
-    let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "text/html");
-    if (data == nil) { return 0; }
-    do {
-        let textContent = String(data: data!, encoding: .utf8) ?? ""
-        if textContent.contains("post-vote-up-\(postId) score-positive") {
-            return 1
-        }
-        else if textContent.contains("post-vote-down-\(postId) score-negative") {
-            return -1
-        }
-        return 0
+    let url = "/posts/\(postId)";
+    let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
+    if data == nil { return 0; }
+    let textContent = String(data: data!, encoding: .utf8) ?? "";
+    if textContent.contains("post-vote-up-\(postId) score-positive") {
+        return 1;
+    } else if textContent.contains("post-vote-down-\(postId) score-negative") {
+        return -1;
     }
+    return 0;
 }
 
 func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
@@ -382,9 +381,7 @@ func makeRequest(destination: String, method: String, body: Data?, contentType: 
         }
         return data;
     } catch {
-        DispatchQueue.main.async {
-            os_log("Failed to make request: %{public}s", log: .default, error.localizedDescription);
-        }
-        return nil
+        os_log("Failed to make request: %{public}s", log: .default, error.localizedDescription);
+        return nil;
     }
 }
