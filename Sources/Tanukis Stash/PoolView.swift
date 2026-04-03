@@ -78,7 +78,6 @@ struct PoolView: View {
                 favorited = first.is_favorited;
             }
             await loadPosts();
-            if scrolledIndex == nil { scrolledIndex = currentIndex; }
         }
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
@@ -116,7 +115,7 @@ struct PoolView: View {
     private var carouselView: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
-                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                ForEach(Array(posts.enumerated()), id: \.offset) { index, post in
                     poolPostPage(post: post, index: index)
                         .id(index)
                         .containerRelativeFrame(.horizontal)
@@ -197,7 +196,7 @@ struct PoolView: View {
                         .padding(10)
                 }
                 LazyVGrid(columns: postGridColumns) {
-                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                    ForEach(Array(posts.enumerated()), id: \.offset) { index, post in
                         Button {
                             currentIndex = index;
                             scrolledIndex = index;
@@ -269,10 +268,13 @@ struct PoolView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
                         guard let post = currentPost else { return }
+                        let wasFavorited = favorited;
+                        favorited = !wasFavorited;
                         Task {
-                            favorited = favorited
+                            let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
-                                : await favoritePost(postId: post.id)
+                                : await favoritePost(postId: post.id);
+                            if !success { favorited = wasFavorited; }
                         }
                     } label: {
                         Image(systemName: favorited ? "heart.fill" : "heart")
@@ -311,9 +313,9 @@ struct PoolView: View {
                     } label: {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
                     }
-                    if let post = currentPost {
+                    if let post = currentPost, let shareURL = URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)") {
                         ShareLink(
-                            item: URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)")!,
+                            item: shareURL,
                             label: { Label("Share Link", systemImage: "link") }
                         )
                     }
@@ -358,6 +360,7 @@ struct PoolView: View {
             return;
         }
 
+        scrolledIndex = currentIndex;
         posts = allPosts;
         allLoaded = true;
         isLoading = false;
