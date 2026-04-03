@@ -14,7 +14,7 @@ struct PostToastModifier: ViewModifier {
                 toastForType()
             }
             .onChange(of: displayToastType) { _, newValue in
-                if newValue == 2 { clearToast(); }
+                if newValue != 0 { clearToast(); }
             }
     }
 
@@ -30,7 +30,6 @@ struct PostToastModifier: ViewModifier {
     }
 
     private func toastForType() -> AlertToast {
-        clearToast();
         switch displayToastType {
         case 1:
             return AlertToast(displayMode: .hud, type: .error(Color.red), title: "Failed to save");

@@ -14,7 +14,7 @@ struct DTextView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(blocks) { block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 DTextBlockView(block: block, revealedSpoilers: $revealedSpoilers, domain: domain)
             }
         }
