@@ -245,7 +245,6 @@ struct LoginButton: View {
         if (AUTHENTICATED) {
             Button("Logout") {
                 AUTHENTICATED = false;
-                UserDefaults.standard.set(AUTHENTICATED, forKey: UDKey.authenticated);
             }.foregroundColor(.red)
         } else {
             Button("Login") {
@@ -253,7 +252,6 @@ struct LoginButton: View {
                     UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
                     UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
                     AUTHENTICATED = await login();
-                    UserDefaults.standard.set(AUTHENTICATED, forKey: UDKey.authenticated);
                     if (!AUTHENTICATED) {
                         ShowAlert.toggle()
                     }

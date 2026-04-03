@@ -237,9 +237,6 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
         // If the blacklist is enabled, filter out blacklisted posts
         if (UserDefaults.standard.bool(forKey: UDKey.enableBlacklist)) {
             let blacklistedTags = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
-            guard blacklistedTags != "No Auth" && blacklistedTags != "Bad usrdata" else {
-                return filteredPosts;
-            }
             let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) };
             filteredPosts = filteredPosts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) };
         }
