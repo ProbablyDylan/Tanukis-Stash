@@ -250,9 +250,9 @@ struct DTextInlineView: View {
             return str
 
         case .commentRef(let id):
-            var str = AttributedString("comment #\(id)")
-            str.link = URL(string: "https://\(domain)/comments/\(id)")
-            return str
+            var str = AttributedString("comment #\(id)");
+            str.link = URL(string: "tanuki://comment/\(id)");
+            return str;
 
         case .userRef(let name):
             var str = AttributedString("@\(name)")
@@ -268,6 +268,28 @@ struct DTextInlineView: View {
             var str = AttributedString(display ?? query.replacingOccurrences(of: "_", with: " "))
             str.link = URL(string: "tanuki://search/\(query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query)")
             return str
+
+        case .topicRef(let id):
+            var str = AttributedString("topic #\(id)");
+            str.link = URL(string: "https://\(domain)/forum_topics/\(id)");
+            return str;
+
+        case .forumRef(let id):
+            var str = AttributedString("forum #\(id)");
+            str.link = URL(string: "https://\(domain)/forum_posts/\(id)");
+            return str;
+
+        case .artistRef(let id):
+            var str = AttributedString("artist #\(id)");
+            str.link = URL(string: "https://\(domain)/artists/\(id)");
+            return str;
+
+        case .translationNote(let children):
+            var str = buildAttributedString(children);
+            str.font = .caption2;
+            str.foregroundColor = .secondary;
+            str.baselineOffset = 6;
+            return str;
         }
     }
 
@@ -301,17 +323,24 @@ struct DTextTableView: View {
     let domain: String
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
-            ForEach(rows) { row in
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 GridRow {
                     ForEach(row.cells) { cell in
                         if cell.isHeader {
                             DTextInlineView(inlines: cell.content, revealedSpoilers: $revealedSpoilers, domain: domain)
                                 .fontWeight(.bold)
+                                .padding(.vertical, 6)
                         } else {
                             DTextInlineView(inlines: cell.content, revealedSpoilers: $revealedSpoilers, domain: domain)
+                                .padding(.vertical, 6)
+                                .textSelection(.enabled)
                         }
                     }
+                }
+                .background(row.cells.contains(where: { $0.isHeader }) ? Color.secondary.opacity(0.1) : Color.clear)
+                if index < rows.count - 1 {
+                    Divider()
                 }
             }
         }
