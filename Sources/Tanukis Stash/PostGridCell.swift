@@ -50,35 +50,50 @@ struct PostGridCell: View {
     }
 }
 
-struct PostContextPreview: View {
+struct PostContextPreview: UIViewRepresentable {
 
     let post: PostContent;
-    @State private var fullImageLoaded = false;
 
     private var isVideo: Bool {
         ["webm", "mp4"].contains(post.file.ext);
     }
 
-    var body: some View {
-        if let previewURL = post.preview.url {
-            let fullURL = isVideo ? post.sample.url : post.file.url;
-            ZStack {
-                if !fullImageLoaded {
-                    KFImage(URL(string: previewURL))
-                        .resizable()
-                        .scaledToFit()
+    private var previewSize: CGSize {
+        let maxW: CGFloat = 300;
+        let maxH: CGFloat = 400;
+        let aspect = CGFloat(post.file.width) / CGFloat(post.file.height);
+        let w = min(maxW, maxH * aspect);
+        let h = w / aspect;
+        return CGSize(width: w, height: h);
+    }
+
+    func makeUIView(context: Context) -> UIImageView {
+        let imageView = UIImageView();
+        imageView.contentMode = .scaleAspectFill;
+        imageView.clipsToBounds = true;
+        imageView.frame = CGRect(origin: .zero, size: previewSize);
+
+        if let previewURL = post.preview.url, let url = URL(string: previewURL) {
+            imageView.kf.setImage(with: url) { _ in
+                let fullURLStr = isVideo ? post.sample.url : post.file.url;
+                if let fullURLStr, let fullURL = URL(string: fullURLStr) {
+                    KingfisherManager.shared.retrieveImage(with: fullURL) { result in
+                        if case .success(let value) = result {
+                            DispatchQueue.main.async {
+                                imageView.image = value.image;
+                            };
+                        }
+                    };
                 }
-                if let fullURL {
-                    KFImage(URL(string: fullURL))
-                        .onSuccess { _ in fullImageLoaded = true; }
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-        } else {
-            Text("Preview unavailable")
-                .foregroundStyle(.secondary)
-                .frame(width: 200, height: 200)
+            };
         }
+
+        return imageView;
+    }
+
+    func updateUIView(_ uiView: UIImageView, context: Context) {}
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+        return previewSize;
     }
 }
