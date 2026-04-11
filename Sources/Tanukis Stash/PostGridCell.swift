@@ -49,3 +49,36 @@ struct PostGridCell: View {
         .padding(0.1)
     }
 }
+
+struct PostContextPreview: View {
+
+    let post: PostContent;
+    @State private var fullImageLoaded = false;
+
+    private var isVideo: Bool {
+        ["webm", "mp4"].contains(post.file.ext);
+    }
+
+    var body: some View {
+        if let previewURL = post.preview.url {
+            let fullURL = isVideo ? post.sample.url : post.file.url;
+            ZStack {
+                if !fullImageLoaded {
+                    KFImage(URL(string: previewURL))
+                        .resizable()
+                        .scaledToFit()
+                }
+                if let fullURL {
+                    KFImage(URL(string: fullURL))
+                        .onSuccess { _ in fullImageLoaded = true; }
+                        .resizable()
+                        .scaledToFit()
+                }
+            }
+        } else {
+            Text("Preview unavailable")
+                .foregroundStyle(.secondary)
+                .frame(width: 200, height: 200)
+        }
+    }
+}
