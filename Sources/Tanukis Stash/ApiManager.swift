@@ -125,7 +125,7 @@ func updateBlacklist(tags: String) async -> Bool {
 func fetchTags(_ text: String) async -> [TagSuggestion] {
     do {
         let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? text;
-        let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded)&expiry=7&_client=\(userAgent)";
+        let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded)&expiry=7";
 
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
         if (data) == nil { return []; }
@@ -154,14 +154,8 @@ func replaceLastSearchWord(in search: String, with tag: String) -> String {
 }
 
 func parseSearch(_ searchText: String) -> String {
-    if(searchText.contains(" ")) {
-        let index = searchText.lastIndex(of: " ");
-        if(index != nil) {
-            return String(searchText[index!...]).trimmingCharacters(in: .whitespacesAndNewlines);
-        }
-        else {return "";}
-    }
-    else { return searchText; }
+    guard let index = searchText.lastIndex(of: " ") else { return searchText; }
+    return String(searchText[index...]).trimmingCharacters(in: .whitespacesAndNewlines);
 }
 
 @MainActor func debouncedTagSuggestion(
@@ -170,15 +164,20 @@ func parseSearch(_ searchText: String) -> String {
     results: Binding<[TagSuggestion]>
 ) {
     task?.cancel();
-    guard query.count >= 3 else {
-        results.wrappedValue = [];
+    let lastWord = parseSearch(query);
+    guard lastWord.count >= 3 else {
+        // Keep existing suggestions while typing a new word in a multi-tag query
+        if !query.contains(" ") {
+            results.wrappedValue = [];
+        }
         return;
     }
     task = Task {
         try? await Task.sleep(for: .milliseconds(150));
-        if !Task.isCancelled {
-            results.wrappedValue = await createTagList(query);
-        }
+        guard !Task.isCancelled else { return; }
+        let suggestions = await createTagList(query);
+        guard !Task.isCancelled else { return; }
+        results.wrappedValue = suggestions;
     };
 }
 
