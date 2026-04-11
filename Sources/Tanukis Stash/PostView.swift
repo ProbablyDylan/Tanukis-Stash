@@ -14,6 +14,7 @@ struct PostView: View {
     @State private var showImageViewer: Bool = false;
     let post: PostContent;
     let search: String;
+    var highlightCommentId: Int? = nil;
     @State var url: String = "";
 
     @State private var displayToastType = 0;
@@ -60,7 +61,7 @@ struct PostView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     if post.comment_count > 0 {
-                        CommentsView(post: post)
+                        CommentsView(post: post, highlightCommentId: highlightCommentId)
                             .padding(10)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -461,6 +462,8 @@ struct Tag: View {
 
 struct CommentRow: View {
     let comment: CommentContent;
+    var isHighlighted: Bool = false;
+    @State private var highlightOpacity: Double = 0;
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -481,11 +484,23 @@ struct CommentRow: View {
                 .foregroundStyle(.secondary);
             DTextView(text: comment.body)
         }
+        .padding(isHighlighted ? 8 : 0)
+        .background(Color.accentColor.opacity(highlightOpacity))
+        .clipShape(RoundedRectangle(cornerRadius: isHighlighted ? 8 : 0))
+        .onAppear {
+            if isHighlighted {
+                highlightOpacity = 0.2;
+                withAnimation(.easeOut(duration: 2.0).delay(1.0)) {
+                    highlightOpacity = 0;
+                }
+            }
+        }
     }
 }
 
 struct CommentsView: View {
     let post: PostContent;
+    var highlightCommentId: Int? = nil;
     @State private var comments: [CommentContent] = [];
     @State private var isLoading: Bool = false;
     @State private var isExpanded: Bool = false;
@@ -503,15 +518,30 @@ struct CommentsView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading);
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(comments) { comment in
-                            CommentRow(comment: comment);
-                            if comment.id != comments.last?.id {
-                                Divider();
+                    ScrollViewReader { proxy in
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(comments) { comment in
+                                CommentRow(
+                                    comment: comment,
+                                    isHighlighted: comment.id == highlightCommentId
+                                )
+                                .id(comment.id);
+                                if comment.id != comments.last?.id {
+                                    Divider();
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .onChange(of: hasFetched) {
+                            if let targetId = highlightCommentId, comments.contains(where: { $0.id == targetId }) {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    withAnimation {
+                                        proxy.scrollTo(targetId, anchor: .center);
+                                    }
+                                }
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading);
                 }
             } label: {
                 Text("Comments (\(post.comment_count))")
@@ -528,6 +558,11 @@ struct CommentsView: View {
                         isLoading = false;
                         hasFetched = true;
                     }
+                }
+            }
+            .onAppear {
+                if highlightCommentId != nil && !isExpanded {
+                    isExpanded = true;
                 }
             }
         }
