@@ -100,7 +100,7 @@ struct TagView: View {
                     .padding(.vertical, 20)
             }
 
-            PaginatedPostGrid(posts: posts, search: tagName) {
+            PaginatedPostGrid(posts: $posts, search: tagName) {
                 await loadMorePosts();
             }
         }

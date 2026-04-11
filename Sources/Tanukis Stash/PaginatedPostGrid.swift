@@ -33,12 +33,12 @@ struct PaginatedPostGrid<CellContent: View>: View {
 
 extension PaginatedPostGrid where CellContent == PostPreviewFrame {
     init(
-        posts: [PostContent],
+        posts: Binding<[PostContent]>,
         search: String,
         loadMore: @escaping () async -> Void
     ) {
-        self.posts = posts;
+        self.posts = posts.wrappedValue;
         self.loadMore = loadMore;
-        self.cell = { _, post in PostPreviewFrame(post: post, search: search) };
+        self.cell = { i, _ in PostPreviewFrame(post: posts[i], search: search) };
     }
 }

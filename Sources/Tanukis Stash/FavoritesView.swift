@@ -45,7 +45,7 @@ struct FavoritesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             PaginatedPostGrid(posts: sortedPosts, loadMore: loadMorePosts) { _, post in
-                PostPreviewFrame(post: post, search: searchTag)
+                PostPreviewFrame(post: .constant(post), search: searchTag)
                     .contextMenu {
                         Button(role: .destructive) {
                             Task {

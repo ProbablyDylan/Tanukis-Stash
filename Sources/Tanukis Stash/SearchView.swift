@@ -38,7 +38,7 @@ struct SearchView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            PaginatedPostGrid(posts: posts, search: activeSearch) {
+            PaginatedPostGrid(posts: $posts, search: activeSearch) {
                 await getPosts(append: true);
             }
         }
@@ -156,12 +156,13 @@ struct SearchView: View {
 }
 
 struct PostPreviewFrame: View {
-    let post: PostContent;
+    @Binding var post: PostContent;
     let search: String;
 
     var body: some View {
         NavigationLink(destination: PostView(post: post, search: search)) {
             PostGridCell(post: post)
         }
+        .postContextMenu(post: $post)
     }
 }
