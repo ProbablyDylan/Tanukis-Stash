@@ -367,9 +367,10 @@ struct DTextParser {
             // Check for closing tag if we're inside a BBCode block
             if let stop = stopTag {
                 let closeTag = "[/\(stop)]";
-                if input[pos...].lowercased().hasPrefix(closeTag.lowercased()) {
+                if let endIdx = input.index(pos, offsetBy: closeTag.count, limitedBy: input.endIndex),
+                   String(input[pos..<endIdx]).caseInsensitiveCompare(closeTag) == .orderedSame {
                     flushText(upTo: pos);
-                    pos = input.index(pos, offsetBy: closeTag.count);
+                    pos = endIdx;
                     return result;
                 }
             }
@@ -507,7 +508,9 @@ struct DTextParser {
 
         // [url=...]...[/url] — recursive children
         if let match = sub.firstMatch(of: /(?i)^\[url=([^\]]+)\]/) {
-            let urlStr = String(match.1);
+            let rawUrl = String(match.1);
+            let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+            let urlStr = interceptE621URL(rawUrl, domain: domain);
             var innerPos = match.range.upperBound;
             let children = parseInlineNodes(input, pos: &innerPos, stopTag: "url");
             return (.link(DTextLink(url: urlStr, display: children)), innerPos);
@@ -669,7 +672,7 @@ struct DTextParser {
     /// Returns the original URL unchanged if no in-app route matches.
     private func interceptE621URL(_ urlStr: String, domain: String) -> String {
         guard let url = URL(string: urlStr) else { return urlStr; }
-        let host = url.host?.lowercased() ?? "";
+        let host = (url.host?.lowercased() ?? "").replacingOccurrences(of: "www.", with: "", options: .anchored);
 
         // Only intercept e621/e926 URLs
         guard host == "e621.net" || host == "e926.net" || host == domain.lowercased() else { return urlStr; }
