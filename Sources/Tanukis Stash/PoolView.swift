@@ -204,6 +204,7 @@ struct PoolView: View {
                         } label: {
                             gridCell(post: post, isSelected: index == currentIndex)
                         }
+                        .postContextMenu(post: $posts[index])
                         .id(index)
                     }
                 }
