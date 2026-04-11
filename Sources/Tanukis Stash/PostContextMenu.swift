@@ -65,6 +65,7 @@ struct PostContextMenu: ViewModifier {
             .sheet(isPresented: $showShareSheet) {
                 ActivityView(activityItems: shareItems)
             }
+            .postToast(displayToastType: $displayToastType)
     }
 }
 
