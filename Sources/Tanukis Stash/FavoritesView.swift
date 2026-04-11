@@ -45,16 +45,16 @@ struct FavoritesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             PaginatedPostGrid(posts: sortedPosts, loadMore: loadMorePosts) { _, post in
-                PostPreviewFrame(post: .constant(post), search: searchTag)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            Task {
-                                await unfavorite(post: post)
-                            }
-                        } label: {
-                            Label("Unfavorite", systemImage: "heart.slash")
-                        }
+                if let idx = posts.firstIndex(where: { $0.id == post.id }) {
+                    NavigationLink(destination: PostView(post: post, search: searchTag)) {
+                        PostGridCell(post: post)
                     }
+                    .postContextMenu(post: $posts[idx], onUnfavorite: {
+                        withAnimation {
+                            posts.removeAll { $0.id == post.id }
+                        }
+                    })
+                }
             }
         }
         .scrollPosition(id: $scrolledPostID)
