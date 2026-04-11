@@ -428,6 +428,15 @@ struct DTextParser {
                 continue;
             }
 
+            // User mentions: @username
+            if let (node, end) = tryParseUserMention(input, from: pos) {
+                flushText(upTo: pos);
+                result.append(node);
+                pos = end;
+                textStart = end;
+                continue;
+            }
+
             // Bare URLs
             if let (node, end) = tryParseBareURL(input, from: pos) {
                 flushText(upTo: pos);
@@ -577,26 +586,64 @@ struct DTextParser {
     private func tryParseReference(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
         // Only match at word boundary
         if pos > input.startIndex {
-            let prevChar = input[input.index(before: pos)]
-            if prevChar.isLetter || prevChar.isNumber { return nil }
+            let prevChar = input[input.index(before: pos)];
+            if prevChar.isLetter || prevChar.isNumber { return nil; }
         }
 
-        let sub = input[pos...]
+        let sub = input[pos...];
 
         if let match = sub.firstMatch(of: /(?i)^post\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil }
-            return (.postRef(id), match.range.upperBound)
+            guard let id = Int(match.1) else { return nil; }
+            return (.postRef(id), match.range.upperBound);
         }
         if let match = sub.firstMatch(of: /(?i)^pool\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil }
-            return (.poolRef(id), match.range.upperBound)
+            guard let id = Int(match.1) else { return nil; }
+            return (.poolRef(id), match.range.upperBound);
         }
         if let match = sub.firstMatch(of: /(?i)^comment\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil }
-            return (.commentRef(id), match.range.upperBound)
+            guard let id = Int(match.1) else { return nil; }
+            return (.commentRef(id), match.range.upperBound);
+        }
+        if let match = sub.firstMatch(of: /(?i)^topic\s+#(\d+)/) {
+            guard let id = Int(match.1) else { return nil; }
+            return (.topicRef(id), match.range.upperBound);
+        }
+        if let match = sub.firstMatch(of: /(?i)^forum\s+#(\d+)/) {
+            guard let id = Int(match.1) else { return nil; }
+            return (.forumRef(id), match.range.upperBound);
+        }
+        if let match = sub.firstMatch(of: /(?i)^artist\s+#(\d+)/) {
+            guard let id = Int(match.1) else { return nil; }
+            return (.artistRef(id), match.range.upperBound);
         }
 
-        return nil
+        return nil;
+    }
+
+    // MARK: - User mentions: @username
+
+    private func tryParseUserMention(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
+        guard input[pos] == "@" else { return nil; }
+
+        // Must be at word boundary
+        if pos > input.startIndex {
+            let prevChar = input[input.index(before: pos)];
+            if prevChar.isLetter || prevChar.isNumber || prevChar == "_" { return nil; }
+        }
+
+        let afterAt = input.index(after: pos);
+        guard afterAt < input.endIndex else { return nil; }
+
+        // Username: alphanumeric and underscores
+        var end = afterAt;
+        while end < input.endIndex && (input[end].isLetter || input[end].isNumber || input[end] == "_") {
+            end = input.index(after: end);
+        }
+
+        let name = String(input[afterAt..<end]);
+        guard !name.isEmpty else { return nil; }
+
+        return (.userRef(name), end);
     }
 
     // MARK: - Bare URLs
