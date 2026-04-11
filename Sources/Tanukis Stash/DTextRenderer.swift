@@ -145,6 +145,7 @@ struct DTextInlineView: View {
     let inlines: [DTextInline]
     @Binding var revealedSpoilers: Set<Int>
     let domain: String
+    @Environment(\.openURL) private var parentOpenURL;
 
     var body: some View {
         Text(buildAttributedString(inlines))
@@ -152,13 +153,14 @@ struct DTextInlineView: View {
                 if url.scheme == "tanuki", url.host == "spoiler",
                    let idStr = url.pathComponents.last, let id = Int(idStr) {
                     if revealedSpoilers.contains(id) {
-                        revealedSpoilers.remove(id)
+                        revealedSpoilers.remove(id);
                     } else {
-                        revealedSpoilers.insert(id)
+                        revealedSpoilers.insert(id);
                     }
-                    return .handled
+                    return .handled;
                 }
-                return .systemAction
+                parentOpenURL(url);
+                return .handled;
             })
     }
 
