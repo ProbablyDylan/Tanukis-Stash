@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var navigateToSearch: String?
     @State private var navigateToTag: String?
     @State private var loadingPostId: Int?
+    @State private var loadingCommentId: Int?
+    @State private var highlightCommentId: Int?
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,8 @@ struct ContentView: View {
                     await tagCacheSyncIfNeeded();
                 }
                 .navigationDestination(item: $navigateToPost) { post in
-                    PostView(post: post, search: "")
+                    PostView(post: post, search: "", highlightCommentId: highlightCommentId)
+                        .onDisappear { highlightCommentId = nil; }
                 }
                 .navigationDestination(item: $navigateToPoolId) { poolId in
                     PoolView(poolId: poolId)
@@ -75,6 +78,27 @@ struct ContentView: View {
             case "search":
                 if let query = url.pathComponents.last?.removingPercentEncoding {
                     navigateToSearch = query;
+                }
+                return .handled
+
+            case "comment":
+                if let idStr = url.pathComponents.last, let id = Int(idStr) {
+                    loadingCommentId = id;
+                    Task {
+                        if let comment = await getComment(commentId: id) {
+                            if let post = await getPost(postId: comment.post_id) {
+                                await MainActor.run {
+                                    highlightCommentId = id;
+                                    navigateToPost = post;
+                                    loadingCommentId = nil;
+                                }
+                            } else {
+                                await MainActor.run { loadingCommentId = nil; }
+                            }
+                        } else {
+                            await MainActor.run { loadingCommentId = nil; }
+                        }
+                    }
                 }
                 return .handled
 

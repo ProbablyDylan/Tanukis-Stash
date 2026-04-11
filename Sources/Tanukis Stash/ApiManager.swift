@@ -210,6 +210,10 @@ func fetchComments(postId: Int) async -> [CommentContent] {
     return (comments ?? []).filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
 }
 
+func getComment(commentId: Int) async -> CommentContent? {
+    return await fetchJSON("/comments/\(commentId).json", logLabel: "comment \(commentId)");
+}
+
 func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostContent] {
     do {
         let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
