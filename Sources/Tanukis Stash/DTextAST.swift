@@ -75,9 +75,13 @@ indirect enum DTextInline {
     case postRef(Int)
     case poolRef(Int)
     case commentRef(Int)
+    case topicRef(Int)
+    case forumRef(Int)
+    case artistRef(Int)
     case userRef(String)
     case wikiLink(tag: String, display: String?)
     case searchLink(query: String, display: String?)
+    case translationNote([DTextInline])
 }
 
 struct DTextLink {
@@ -97,13 +101,17 @@ extension Array where Element == DTextInline {
             switch inline {
             case .text(let s): return s
             case .bold(let c), .italic(let c), .underline(let c), .strikethrough(let c),
-                 .superscript(let c), .subscript(let c), .color(_, let c), .inlineSpoiler(_, let c):
+                 .superscript(let c), .subscript(let c), .color(_, let c), .inlineSpoiler(_, let c),
+                 .translationNote(let c):
                 return c.plainText
             case .inlineCode(let s): return s
             case .link(let l): return l.display.plainText
             case .postRef(let id): return "post #\(id)"
             case .poolRef(let id): return "pool #\(id)"
             case .commentRef(let id): return "comment #\(id)"
+            case .topicRef(let id): return "topic #\(id)"
+            case .forumRef(let id): return "forum #\(id)"
+            case .artistRef(let id): return "artist #\(id)"
             case .userRef(let name): return "@\(name)"
             case .wikiLink(_, let display): return display ?? ""
             case .searchLink(_, let display): return display ?? ""
