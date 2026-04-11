@@ -42,7 +42,6 @@ struct PostView: View {
                         )
                 }
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
-                .padding(EdgeInsets(top: 0, leading: -10, bottom: 0, trailing: -10))
                     PostMetadataBar(post: post, selectedArtist: $selectedArtist)
                     RelatedPostsView(post: post, search: search)
                         .padding(10)
