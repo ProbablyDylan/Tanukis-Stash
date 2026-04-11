@@ -367,7 +367,7 @@ struct InfoView: View {
             TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
             TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
             TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.orange, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.green, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
             TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
             if (!post.sources.isEmpty) {
                 DisclosureGroup {

@@ -44,7 +44,7 @@ struct PostMetadataBar: View {
                     Text(post.tags.artist[0])
                 }
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.orange)
             }
         } else if post.tags.artist.count > 1 {
             Menu {
@@ -59,7 +59,7 @@ struct PostMetadataBar: View {
                     Text(post.tags.artist.joined(separator: ", "))
                 }
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.orange)
             }
         }
     }

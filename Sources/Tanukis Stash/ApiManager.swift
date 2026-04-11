@@ -326,6 +326,7 @@ func tagCategoryColor(_ category: Int) -> Color {
     case 3: return .purple;
     case 4: return .green;
     case 5: return .red;
+    case 8: return .green;
     default: return .blue;
     }
 }
