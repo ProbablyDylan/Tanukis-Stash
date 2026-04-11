@@ -341,167 +341,170 @@ struct DTextParser {
         return .table(rows: rows)
     }
 
-    // MARK: - Inline parsing
+    // MARK: - Inline parsing (recursive descent)
 
     mutating func parseInlines(_ input: String) -> [DTextInline] {
-        var result: [DTextInline] = []
-        var pos = input.startIndex
-        var textStart = input.startIndex
+        var pos = input.startIndex;
+        return parseInlineNodes(input, pos: &pos, stopTag: nil);
+    }
+
+    /// Recursively parse inline nodes. Stops when `stopTag` closing bracket is found, or at end of input.
+    private mutating func parseInlineNodes(_ input: String, pos: inout String.Index, stopTag: String?) -> [DTextInline] {
+        var result: [DTextInline] = [];
+        var textStart = pos;
 
         func flushText(upTo end: String.Index) {
             if textStart < end {
-                let text = String(input[textStart..<end])
+                let text = String(input[textStart..<end]);
                 if !text.isEmpty {
-                    result.append(.text(text))
+                    result.append(.text(text));
                 }
             }
-            textStart = end
+            textStart = end;
         }
 
         while pos < input.endIndex {
-            // BBCode tags
+            // Check for closing tag if we're inside a BBCode block
+            if let stop = stopTag {
+                let closeTag = "[/\(stop)]";
+                if input[pos...].lowercased().hasPrefix(closeTag.lowercased()) {
+                    flushText(upTo: pos);
+                    pos = input.index(pos, offsetBy: closeTag.count);
+                    return result;
+                }
+            }
+
+            // BBCode open tags
             if input[pos] == "[" {
-                if let (node, end) = tryParseBBCode(input, from: pos) {
-                    flushText(upTo: pos)
-                    result.append(node)
-                    pos = end
-                    textStart = end
-                    continue
+                if let (node, end) = tryParseBBCodeRecursive(input, from: pos) {
+                    flushText(upTo: pos);
+                    result.append(node);
+                    pos = end;
+                    textStart = end;
+                    continue;
                 }
             }
 
             // Named link: "text":url
             if input[pos] == "\"" {
                 if let (node, end) = tryParseNamedLink(input, from: pos) {
-                    flushText(upTo: pos)
-                    result.append(node)
-                    pos = end
-                    textStart = end
-                    continue
+                    flushText(upTo: pos);
+                    result.append(node);
+                    pos = end;
+                    textStart = end;
+                    continue;
                 }
             }
 
             // Wiki link: [[...]] and search link: {{...}}
             if pos < input.index(before: input.endIndex) {
-                let next = input.index(after: pos)
+                let next = input.index(after: pos);
                 if input[pos] == "[" && input[next] == "[" {
                     if let (node, end) = tryParseWikiLink(input, from: pos) {
-                        flushText(upTo: pos)
-                        result.append(node)
-                        pos = end
-                        textStart = end
-                        continue
+                        flushText(upTo: pos);
+                        result.append(node);
+                        pos = end;
+                        textStart = end;
+                        continue;
                     }
                 }
                 if input[pos] == "{" && input[next] == "{" {
                     if let (node, end) = tryParseSearchLink(input, from: pos) {
-                        flushText(upTo: pos)
-                        result.append(node)
-                        pos = end
-                        textStart = end
-                        continue
+                        flushText(upTo: pos);
+                        result.append(node);
+                        pos = end;
+                        textStart = end;
+                        continue;
                     }
                 }
             }
 
             // Reference patterns: post #123, pool #123, comment #123
             if let (node, end) = tryParseReference(input, from: pos) {
-                flushText(upTo: pos)
-                result.append(node)
-                pos = end
-                textStart = end
-                continue
+                flushText(upTo: pos);
+                result.append(node);
+                pos = end;
+                textStart = end;
+                continue;
             }
 
             // Bare URLs
             if let (node, end) = tryParseBareURL(input, from: pos) {
-                flushText(upTo: pos)
-                result.append(node)
-                pos = end
-                textStart = end
-                continue
+                flushText(upTo: pos);
+                result.append(node);
+                pos = end;
+                textStart = end;
+                continue;
             }
 
-            pos = input.index(after: pos)
+            pos = input.index(after: pos);
         }
 
-        // Flush remaining text
-        flushText(upTo: input.endIndex)
-
-        return result
+        flushText(upTo: input.endIndex);
+        return result;
     }
 
-    // MARK: - BBCode inline parsing
+    // MARK: - BBCode inline parsing (recursive)
 
-    private mutating func tryParseBBCode(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
-        let sub = input[pos...]
+    private mutating func tryParseBBCodeRecursive(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
+        let sub = input[pos...];
+        let subLower = sub.lowercased();
 
-        // Simple tags
-        let simpleTags: [(String, ([DTextInline]) -> DTextInline)] = [
+        // Simple recursive tags: [b], [i], [u], [s], [sup], [sub], [tn]
+        let recursiveTags: [(String, ([DTextInline]) -> DTextInline)] = [
             ("b", { .bold($0) }),
             ("i", { .italic($0) }),
             ("u", { .underline($0) }),
             ("s", { .strikethrough($0) }),
             ("sup", { .superscript($0) }),
             ("sub", { .subscript($0) }),
-        ]
+            ("tn", { .translationNote($0) }),
+        ];
 
-        for (tag, constructor) in simpleTags {
-            let open = "[\(tag)]"
-            let close = "[/\(tag)]"
-            if sub.lowercased().hasPrefix(open) {
-                if let closeRange = input.range(of: close, options: .caseInsensitive, range: input.index(pos, offsetBy: open.count)..<input.endIndex) {
-                    let innerStart = input.index(pos, offsetBy: open.count)
-                    let inner = String(input[innerStart..<closeRange.lowerBound])
-                    let children = parseInlines(inner)
-                    return (constructor(children), closeRange.upperBound)
-                }
+        for (tag, constructor) in recursiveTags {
+            let open = "[\(tag)]";
+            if subLower.hasPrefix(open.lowercased()) {
+                var innerPos = input.index(pos, offsetBy: open.count);
+                let children = parseInlineNodes(input, pos: &innerPos, stopTag: tag);
+                return (constructor(children), innerPos);
             }
         }
 
-        // [code]...[/code] inline
-        if sub.lowercased().hasPrefix("[code]") {
-            let afterOpen = input.index(pos, offsetBy: 6)
+        // [code]...[/code] inline — no recursion, content is literal
+        if subLower.hasPrefix("[code]") {
+            let afterOpen = input.index(pos, offsetBy: 6);
             if let closeRange = input.range(of: "[/code]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                let content = String(input[afterOpen..<closeRange.lowerBound])
-                return (.inlineCode(content), closeRange.upperBound)
+                let content = String(input[afterOpen..<closeRange.lowerBound]);
+                return (.inlineCode(content), closeRange.upperBound);
             }
         }
 
-        // [color=...]...[/color]
+        // [color=...]...[/color] — recursive children
         if let match = sub.firstMatch(of: /(?i)^\[color=([^\]]+)\]/) {
             let colorName = String(match.1);
-            let afterOpen = match.range.upperBound;
-            if let closeRange = input.range(of: "[/color]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                let inner = String(input[afterOpen..<closeRange.lowerBound]);
-                let children = parseInlines(inner);
-                return (.color(colorName, children), closeRange.upperBound)
-            }
+            var innerPos = match.range.upperBound;
+            let children = parseInlineNodes(input, pos: &innerPos, stopTag: "color");
+            return (.color(colorName, children), innerPos);
         }
 
-        // [spoiler]...[/spoiler] inline
-        if sub.lowercased().hasPrefix("[spoiler]") {
-            let afterOpen = input.index(pos, offsetBy: 9)
-            if let closeRange = input.range(of: "[/spoiler]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                spoilerCounter += 1
-                let inner = String(input[afterOpen..<closeRange.lowerBound])
-                let children = parseInlines(inner)
-                return (.inlineSpoiler(id: spoilerCounter, children), closeRange.upperBound)
-            }
+        // [spoiler]...[/spoiler] inline — recursive children
+        if subLower.hasPrefix("[spoiler]") {
+            spoilerCounter += 1;
+            let sid = spoilerCounter;
+            var innerPos = input.index(pos, offsetBy: 9);
+            let children = parseInlineNodes(input, pos: &innerPos, stopTag: "spoiler");
+            return (.inlineSpoiler(id: sid, children), innerPos);
         }
 
-        // [url=...]...[/url]
+        // [url=...]...[/url] — recursive children
         if let match = sub.firstMatch(of: /(?i)^\[url=([^\]]+)\]/) {
             let urlStr = String(match.1);
-            let afterOpen = match.range.upperBound;
-            if let closeRange = input.range(of: "[/url]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
-                let inner = String(input[afterOpen..<closeRange.lowerBound]);
-                let children = parseInlines(inner);
-                return (.link(DTextLink(url: urlStr, display: children)), closeRange.upperBound)
-            }
+            var innerPos = match.range.upperBound;
+            let children = parseInlineNodes(input, pos: &innerPos, stopTag: "url");
+            return (.link(DTextLink(url: urlStr, display: children)), innerPos);
         }
 
-        return nil
+        return nil;
     }
 
     // MARK: - Named link: "text":url
