@@ -540,13 +540,30 @@ struct DTextParser {
             urlEnd = input.index(after: urlEnd)
         }
 
-        let urlStr = String(input[urlStart..<urlEnd])
-        guard !urlStr.isEmpty else { return nil }
+        let urlStr = String(input[urlStart..<urlEnd]);
+        guard !urlStr.isEmpty else { return nil; }
 
         // Validate it looks like a URL or relative path
-        guard urlStr.hasPrefix("http") || urlStr.hasPrefix("/") || urlStr.hasPrefix("#") else { return nil }
+        guard urlStr.hasPrefix("http") || urlStr.hasPrefix("/") || urlStr.hasPrefix("#") else { return nil; }
 
-        return (.link(DTextLink(url: urlStr, display: [.text(display)])), urlEnd)
+        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+
+        // Resolve the URL
+        let resolved: String;
+        if urlStr.hasPrefix("/") {
+            // Relative path — run through interception, fall back to full domain URL
+            let fullURL = "https://\(domain)\(urlStr)";
+            let intercepted = interceptE621URL(fullURL, domain: domain);
+            resolved = intercepted == fullURL ? fullURL : intercepted;
+        } else if urlStr.hasPrefix("#") {
+            // Fragment links — no-op in app
+            resolved = urlStr;
+        } else {
+            // Absolute URL — intercept e621/e926 URLs
+            resolved = interceptE621URL(urlStr, domain: domain);
+        }
+
+        return (.link(DTextLink(url: resolved, display: [.text(display)])), urlEnd);
     }
 
     // MARK: - Wiki links: [[tag]] or [[tag|display]]
@@ -646,6 +663,60 @@ struct DTextParser {
         return (.userRef(name), end);
     }
 
+    // MARK: - e621/e926 URL interception
+
+    /// Converts e621/e926 URLs to tanuki:// in-app routes where possible.
+    /// Returns the original URL unchanged if no in-app route matches.
+    private func interceptE621URL(_ urlStr: String, domain: String) -> String {
+        guard let url = URL(string: urlStr) else { return urlStr; }
+        let host = url.host?.lowercased() ?? "";
+
+        // Only intercept e621/e926 URLs
+        guard host == "e621.net" || host == "e926.net" || host == domain.lowercased() else { return urlStr; }
+
+        let path = url.path;
+        let components = path.split(separator: "/").map(String.init);
+
+        // /wiki_pages/show_or_new?title=tag_name (must come before generic wiki_pages check)
+        if components.count >= 2 && components[0] == "wiki_pages" && components[1] == "show_or_new" {
+            if let queryItems = URLComponents(string: urlStr)?.queryItems,
+               let title = queryItems.first(where: { $0.name == "title" })?.value {
+                return "tanuki://wiki/\(title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title)";
+            }
+        }
+
+        // /posts/12345
+        if components.count >= 2 && components[0] == "posts", let id = Int(components[1]) {
+            return "tanuki://post/\(id)";
+        }
+
+        // /pools/678
+        if components.count >= 2 && components[0] == "pools", let id = Int(components[1]) {
+            return "tanuki://pool/\(id)";
+        }
+
+        // /wiki_pages/tag_name
+        if components.count >= 2 && components[0] == "wiki_pages" {
+            let name = components[1];
+            return "tanuki://wiki/\(name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name)";
+        }
+
+        // /posts?tags=search+terms
+        if components.count >= 1 && components[0] == "posts" {
+            if let queryItems = URLComponents(string: urlStr)?.queryItems,
+               let tags = queryItems.first(where: { $0.name == "tags" })?.value {
+                return "tanuki://search/\(tags.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tags)";
+            }
+        }
+
+        // /comments/123
+        if components.count >= 2 && components[0] == "comments", let id = Int(components[1]) {
+            return "tanuki://comment/\(id)";
+        }
+
+        return urlStr;
+    }
+
     // MARK: - Bare URLs
 
     private func tryParseBareURL(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
@@ -676,7 +747,10 @@ struct DTextParser {
         let urlStr = String(input[pos..<end])
         guard urlStr.count > 8 else { return nil }
 
-        return (.link(DTextLink(url: urlStr, display: [.text(urlStr)])), end)
+        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+        let resolved = interceptE621URL(urlStr, domain: domain);
+        let displayText = urlStr;  // Always show original URL as display text
+        return (.link(DTextLink(url: resolved, display: [.text(displayText)])), end);
     }
 
     // MARK: - Line utilities
