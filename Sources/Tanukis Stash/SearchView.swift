@@ -74,7 +74,7 @@ struct SearchView: View {
         }
         #if os(iOS)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarLeading) {
                 Button("Settings", systemImage: "gearshape") {
                     showSettings = true;
                 }
