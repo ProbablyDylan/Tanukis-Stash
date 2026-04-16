@@ -74,16 +74,13 @@ struct SearchView: View {
         }
         #if os(iOS)
         .toolbar {
-            ToolbarItem(placement: .bottomBar) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Settings", systemImage: "gearshape") {
                     showSettings = true;
                 }
             }
-            ToolbarSpacer(.flexible, placement: .bottomBar)
-            DefaultToolbarItem(kind: .search, placement: .bottomBar)
-            ToolbarSpacer(.flexible, placement: .bottomBar)
             if (AUTHENTICATED) {
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(destination: FavoritesView()) {
                         Label("Favorites", systemImage: "heart")
                     }
