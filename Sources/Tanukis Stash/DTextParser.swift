@@ -177,30 +177,41 @@ struct DTextParser {
         }
 
         while !remaining.isEmpty && depth > 0 {
-            let line = consumeLine(&remaining)
+            let line = consumeLine(&remaining);
+            var searchStart = line.startIndex;
+            var foundClose = false;
 
-            // Count nested opens and closes using case-insensitive search on original string
-            var searchStart = line.startIndex
-            while let openRange = line.range(of: openTag, options: .caseInsensitive, range: searchStart..<line.endIndex) {
-                depth += 1
-                searchStart = openRange.upperBound
+            // Single pass: process open and close tags in document order
+            while searchStart < line.endIndex {
+                let openRange = line.range(of: openTag, options: .caseInsensitive, range: searchStart..<line.endIndex);
+                let closeRange = line.range(of: closeTag, options: .caseInsensitive, range: searchStart..<line.endIndex);
+
+                // Determine which tag comes first
+                if let cr = closeRange, (openRange == nil || cr.lowerBound <= openRange!.lowerBound) {
+                    depth -= 1;
+                    if depth == 0 {
+                        let beforeClose = String(line[line.startIndex..<cr.lowerBound]);
+                        if !content.isEmpty { content += "\n"; }
+                        content += beforeClose;
+                        foundClose = true;
+                        break;
+                    }
+                    searchStart = cr.upperBound;
+                } else if let or = openRange {
+                    depth += 1;
+                    searchStart = or.upperBound;
+                } else {
+                    break;
+                }
             }
 
-            searchStart = line.startIndex
-            while let closeRange = line.range(of: closeTag, options: .caseInsensitive, range: searchStart..<line.endIndex) {
-                depth -= 1
-                if depth == 0 {
-                    let beforeClose = String(line[line.startIndex..<closeRange.lowerBound])
-                    if !content.isEmpty { content += "\n" }
-                    content += beforeClose
-                    return content.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                searchStart = closeRange.upperBound
+            if foundClose {
+                return content.trimmingCharacters(in: .whitespacesAndNewlines);
             }
 
             if depth > 0 {
-                if !content.isEmpty { content += "\n" }
-                content += line
+                if !content.isEmpty { content += "\n"; }
+                content += line;
             }
         }
 

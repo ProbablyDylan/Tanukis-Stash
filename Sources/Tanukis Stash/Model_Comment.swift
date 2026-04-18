@@ -17,7 +17,7 @@ struct CommentContent: Decodable, Identifiable {
     let body: String;
     let score: Int;
     let created_at: String;
-    let updated_at: String;
+    let updated_at: String?;
     let is_hidden: Bool;
     let is_sticky: Bool;
     let do_not_bump_post: Bool;

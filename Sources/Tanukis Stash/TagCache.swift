@@ -80,22 +80,14 @@ func tagCacheSyncIfNeeded() async {
 
     var csvData: Data?;
     for dateStr in [today, yesterday] {
-        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-        let urlStr = "https://\(domain)/db_export/tags-\(dateStr).csv.gz";
-        guard let url = URL(string: urlStr) else { continue; }
-        var request = URLRequest(url: url);
-        request.addValue(userAgent.removingPercentEncoding ?? userAgent, forHTTPHeaderField: "User-Agent");
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request);
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                csvData = decompressGzip(data);
-                if csvData != nil {
-                    os_log("Downloaded tag export for %{public}s (%{public}d bytes compressed)", log: .default, dateStr, data.count);
-                    break;
-                }
+        let endpoint = "/db_export/tags-\(dateStr).csv.gz";
+        let data = await makeRequest(destination: endpoint, method: "GET", body: nil, contentType: "application/octet-stream");
+        if let data = data {
+            csvData = decompressGzip(data);
+            if csvData != nil {
+                os_log("Downloaded tag export for %{public}s (%{public}d bytes compressed)", log: .default, dateStr, data.count);
+                break;
             }
-        } catch {
-            os_log("Tag export download failed for %{public}s: %{public}s", log: .default, dateStr, error.localizedDescription);
         }
     }
 
@@ -112,12 +104,22 @@ func tagCacheSyncIfNeeded() async {
             try db.execute(sql: "DELETE FROM tags");
             // Skip header line
             for line in lines.dropFirst() {
-                let cols = line.split(separator: ",", maxSplits: 4, omittingEmptySubsequences: false);
-                guard cols.count >= 4 else { continue; }
-                let id = Int(cols[0]) ?? 0;
-                let name = String(cols[1]);
-                let category = Int(cols[2]) ?? 0;
-                let postCount = Int(cols[3]) ?? 0;
+                let str = String(line);
+                // CSV format: id,name,category,post_count,is_locked
+                // Parse from ends inward since only name can contain commas
+                guard let firstComma = str.firstIndex(of: ",") else { continue; }
+                guard let lastComma = str.lastIndex(of: ",") else { continue; }
+                guard lastComma > firstComma else { continue; }
+                let beforeLast = str[str.startIndex..<lastComma];
+                guard let secondLastComma = beforeLast.lastIndex(of: ",") else { continue; }
+                guard secondLastComma > firstComma else { continue; }
+                let beforeSecondLast = str[str.startIndex..<secondLastComma];
+                guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { continue; }
+
+                let id = Int(str[str.startIndex..<firstComma]) ?? 0;
+                let name = String(str[str.index(after: firstComma)..<thirdLastComma]);
+                let category = Int(str[str.index(after: thirdLastComma)..<secondLastComma]) ?? 0;
+                let postCount = Int(str[str.index(after: secondLastComma)..<lastComma]) ?? 0;
                 try db.execute(
                     sql: "INSERT OR REPLACE INTO tags (id, name, postCount, category) VALUES (?, ?, ?, ?)",
                     arguments: [id, name, postCount, category]

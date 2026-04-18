@@ -36,7 +36,7 @@ struct DTextBlockView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(children) { child in
+                    ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                         DTextBlockView(block: child, revealedSpoilers: $revealedSpoilers, domain: domain)
                     }
                 }
@@ -57,7 +57,7 @@ struct DTextBlockView: View {
         case .spoilerBlock(let id, let children):
             if revealedSpoilers.contains(id) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(children) { child in
+                    ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                         DTextBlockView(block: child, revealedSpoilers: $revealedSpoilers, domain: domain)
                     }
                 }
@@ -79,7 +79,7 @@ struct DTextBlockView: View {
         case .section(let title, let children):
             DisclosureGroup(title ?? "Show") {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(children) { child in
+                    ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                         DTextBlockView(block: child, revealedSpoilers: $revealedSpoilers, domain: domain)
                     }
                 }

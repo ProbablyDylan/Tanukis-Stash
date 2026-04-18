@@ -19,7 +19,7 @@ struct PostContent: Decodable, Hashable {
     
     let id: Int;
     let created_at: String;
-    let updated_at: String;
+    let updated_at: String?;
     let file: File;
     let preview: Preview;
     let sample: Sample;
@@ -71,15 +71,14 @@ struct Alternates: Decodable, Hashable {
 }
 
 struct Variants: Decodable, Hashable {
+    let webm: Alternate?;
     let mp4: Alternate?;
 }
 
 struct Alternate: Decodable, Hashable {
-    let type: String?;
     let height: Int?;
     let width: Int?;
     let url: String?;
-    let urls: [String]?;
 }
 
 struct Score: Decodable, Hashable {
@@ -134,7 +133,7 @@ struct PoolContent: Decodable {
     let post_count: Int;
     let creator_name: String;
     let created_at: String;
-    let updated_at: String;
+    let updated_at: String?;
     let is_active: Bool;
     let is_deleted: Bool;
 }

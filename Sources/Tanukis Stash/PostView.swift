@@ -19,8 +19,8 @@ struct PostView: View {
 
     @State private var displayToastType = 0;
     @State private var favorited: Bool = false;
-    @State private var our_score: Int = 2;
-    @State private var score_valid: Bool = false;
+    @State private var our_score: Int = 0;
+    @State private var score_valid: Bool = true;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     @State private var descExpanded: Bool = true;
     @State private var shareItems: [Any] = [];
@@ -148,7 +148,6 @@ struct PostView: View {
             .onAppear { favorited = post.is_favorited }
             .task {
                 await fetchCurrentPostLiked()
-                await fetchCurrentPostVote()
             }
             .navigationDestination(item: $selectedArtist) { artist in
                 TagView(tagName: artist)
@@ -169,11 +168,6 @@ struct PostView: View {
         } catch {
             os_log("Error fetching post liked state: %{public}s", log: .default, error.localizedDescription);
         }
-    }
-
-    func fetchCurrentPostVote() async {
-        our_score = await getVote(postId: post.id);
-        score_valid = [-1,0,1].contains(our_score);
     }
 
 }
@@ -534,7 +528,8 @@ struct CommentsView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                         .onChange(of: hasFetched) {
                             if let targetId = highlightCommentId, comments.contains(where: { $0.id == targetId }) {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(300));
                                     withAnimation {
                                         proxy.scrollTo(targetId, anchor: .center);
                                     }

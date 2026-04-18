@@ -31,8 +31,8 @@ struct PoolView: View {
     // Current post interaction state
     @State private var showImageViewer = false
     @State private var favorited = false
-    @State private var our_score = 2
-    @State private var score_valid = false
+    @State private var our_score = 0
+    @State private var score_valid = true
     @State private var displayToastType = 0
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
@@ -74,24 +74,15 @@ struct PoolView: View {
         }
         .task {
             if pool == nil { pool = await fetchPool(poolId: poolId) }
-            if let first = posts.first {
-                favorited = first.is_favorited;
+            if posts.indices.contains(currentIndex) {
+                favorited = posts[currentIndex].is_favorited;
             }
             await loadPosts();
         }
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
             favorited = posts[newIndex].is_favorited
-            score_valid = false
-            our_score = 2
-            Task {
-                let postId = posts[newIndex].id
-                let vote = await getVote(postId: postId)
-                if currentIndex == newIndex {
-                    our_score = vote
-                    score_valid = [-1, 0, 1].contains(vote)
-                }
-            }
+            our_score = 0
         }
         .navigationTitle(poolDisplayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -218,6 +209,11 @@ struct PoolView: View {
             }
             .onAppear {
                 proxy.scrollTo(currentIndex, anchor: .center)
+            }
+            .onChange(of: showGrid) { _, visible in
+                if visible {
+                    proxy.scrollTo(currentIndex, anchor: .center)
+                }
             }
         }
     }
@@ -365,17 +361,9 @@ struct PoolView: View {
         allLoaded = true;
         isLoading = false;
         prefetchThumbnails(for: posts);
-        if let first = posts.first {
-            favorited = first.is_favorited;
+        if posts.indices.contains(currentIndex) {
+            favorited = posts[currentIndex].is_favorited;
         }
-        await fetchCurrentPostVote();
-    }
-
-
-    private func fetchCurrentPostVote() async {
-        guard let post = currentPost else { return }
-        our_score = await getVote(postId: post.id)
-        score_valid = [-1, 0, 1].contains(our_score)
     }
 
 }

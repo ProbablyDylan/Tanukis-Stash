@@ -57,7 +57,7 @@ func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool 
         // Skip comment-only lines
         if line.isEmpty || line.hasPrefix("#") { continue; }
 
-        let rawTokens = Set(line.split(separator: " ").map { String($0) }).filter { !$0.isEmpty };
+        let rawTokens = line.split(separator: " ").map { String($0) }.filter { !$0.isEmpty };
         if rawTokens.isEmpty { continue; }
 
         // Parse tokens into required and optional groups
@@ -115,7 +115,7 @@ private func blacklistTokenMatchesPost(_ token: String, post: PostContent, tagSe
         let prefix = String(token[token.startIndex..<colonIdx]);
         let value = String(token[token.index(after: colonIdx)...]);
 
-        switch prefix {
+        switch prefix.lowercased() {
         case "rating":
             let normalized: String;
             switch value {
@@ -386,18 +386,6 @@ func unFavoritePost(postId: Int) async -> Bool {
     return true;
 }
 
-func getVote(postId: Int) async -> Int {
-    let url = "/posts/\(postId)";
-    let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-    if data == nil { return 0; }
-    let textContent = String(data: data!, encoding: .utf8) ?? "";
-    if textContent.contains("post-vote-up-\(postId) score-positive") {
-        return 1;
-    } else if textContent.contains("post-vote-down-\(postId) score-negative") {
-        return -1;
-    }
-    return 0;
-}
 
 func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
     let url = "/posts/\(postId)/votes.json"

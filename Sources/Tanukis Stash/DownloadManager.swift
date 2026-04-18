@@ -10,6 +10,41 @@ private enum DownloadError: Error {
     case moveError
 }
 
+private actor AlbumManager {
+    private var cachedAlbum: PHAssetCollection?;
+
+    func getStashAlbum() async throws -> PHAssetCollection {
+        if let album = cachedAlbum { return album; }
+
+        let fetchOptions = PHFetchOptions();
+        fetchOptions.predicate = NSPredicate(format: "title = %@", "Stash");
+        let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: fetchOptions);
+        if let album = existing.firstObject {
+            cachedAlbum = album;
+            return album;
+        }
+
+        var placeholderID: String?;
+        try await PHPhotoLibrary.shared().performChanges {
+            let request = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: "Stash");
+            placeholderID = request.placeholderForCreatedAssetCollection.localIdentifier;
+        }
+
+        guard let localID = placeholderID else {
+            throw DownloadError.albumCreationFailed;
+        }
+
+        let created = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [localID], options: nil);
+        guard let album = created.firstObject else {
+            throw DownloadError.albumCreationFailed;
+        }
+        cachedAlbum = album;
+        return album;
+    }
+}
+
+private let albumManager = AlbumManager();
+
 func determineAuthorizationStatus() -> PHAuthorizationStatus {
     return PHPhotoLibrary.authorizationStatus(for: .readWrite);
 }
@@ -36,28 +71,7 @@ func ensureAuthorized() async -> Bool {
 }
 
 func findOrCreateStashAlbum() async throws -> PHAssetCollection {
-    let fetchOptions = PHFetchOptions();
-    fetchOptions.predicate = NSPredicate(format: "title = %@", "Stash");
-    let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: fetchOptions);
-    if let album = existing.firstObject {
-        return album;
-    }
-
-    var placeholderID: String?;
-    try await PHPhotoLibrary.shared().performChanges {
-        let request = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: "Stash");
-        placeholderID = request.placeholderForCreatedAssetCollection.localIdentifier;
-    }
-
-    guard let localID = placeholderID else {
-        throw DownloadError.albumCreationFailed;
-    }
-
-    let created = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [localID], options: nil);
-    guard let album = created.firstObject else {
-        throw DownloadError.albumCreationFailed;
-    }
-    return album;
+    return try await albumManager.getStashAlbum();
 }
 
 func saveImageDataToStashAlbum(data: Data, uniformTypeIdentifier: String) async throws {
@@ -81,6 +95,7 @@ func saveVideoToStashAlbum(url: URL) async throws {
     let album = try await findOrCreateStashAlbum();
 
     let (tempURL, _) = try await URLSession.shared.download(from: url);
+    defer { try? FileManager.default.removeItem(at: tempURL); }
 
     // Ensure the destination has an explicit .mp4 extension so Photos recognises it.
     guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {

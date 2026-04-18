@@ -103,6 +103,7 @@ struct DTextView: View {
 
     private func parseIfNeeded() {
         var parser = DTextParser();
+        revealedSpoilers = [];
         blocks = parser.parse(text);
     }
 }

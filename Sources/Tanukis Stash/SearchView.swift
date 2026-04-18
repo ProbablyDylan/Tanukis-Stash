@@ -11,6 +11,7 @@ struct SearchView: View {
     @State var posts = [PostContent]();
     @State var searchSuggestions = [TagSuggestion]();
     @State private var suggestionTask: Task<Void, Never>?;
+    @State private var loadTask: Task<Void, Never>?;
     @State var search: String;
     @State var page = 1;
     @State var showSettings = false;
@@ -49,9 +50,7 @@ struct SearchView: View {
             }
         })
         .refreshable {
-            page = 1;
-            posts = await fetchRecentPosts(page, limit, activeSearch);
-            prefetchThumbnails(for: posts);
+            await getPosts(append: false);
         }
     }
 
@@ -124,26 +123,32 @@ struct SearchView: View {
     }
     
     func getPosts(append: Bool) async {
-        guard !isLoading else { return; }
-        isLoading = true;
-        infoText = loadingText;
-        let newPosts: [PostContent];
-        if append {
-            page += 1;
-            newPosts = await fetchRecentPosts(page, limit, activeSearch);
-            posts += newPosts;
-        } else {
-            page = 1;
-            newPosts = await fetchRecentPosts(page, limit, activeSearch);
-            posts = newPosts;
-        }
+        loadTask?.cancel();
+        let task = Task {
+            isLoading = true;
+            defer { isLoading = false; }
+            infoText = loadingText;
+            let newPosts: [PostContent];
+            if append {
+                page += 1;
+                newPosts = await fetchRecentPosts(page, limit, activeSearch);
+                guard !Task.isCancelled else { return; }
+                posts += newPosts;
+            } else {
+                page = 1;
+                newPosts = await fetchRecentPosts(page, limit, activeSearch);
+                guard !Task.isCancelled else { return; }
+                posts = newPosts;
+            }
 
-        if posts.count == 0 {
-            infoText = noPostsFoundText;
-        }
+            if posts.count == 0 {
+                infoText = noPostsFoundText;
+            }
 
-        prefetchThumbnails(for: newPosts);
-        isLoading = false;
+            prefetchThumbnails(for: newPosts);
+        };
+        loadTask = task;
+        await task.value;
     }
     
     func updateSearch(_ tag: String) {
