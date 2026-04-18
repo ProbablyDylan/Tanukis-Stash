@@ -39,46 +39,160 @@ func login() async -> Bool {
     return true;
 }
 
-func areTagsBlacklisted(blacklistedArray: [String], postTags: [String]) -> Bool {
-    let postTagsSet = Set(postTags.map { $0.lowercased() });
-    for tag in blacklistedArray {
-         // Each line in the blacklist can contain multiple tags separated by spaces, if post contains all of them, it is blacklisted
-        let blacklistLineTags = tag.split(separator: " ").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-        let blacklistLineTagsSet = Set(blacklistLineTags)
-        // Check if the post tags contain all the blacklisted tags in this line
-        if blacklistLineTagsSet.isSubset(of: postTagsSet) {
-            os_log("Post is blacklisted due to tags: %{public}s", log: .default, tag);
-            return true;
-        }
-    }
-    return false
+func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool {
+    let tagSet = Set(
+        (post.tags.general + post.tags.species + post.tags.character +
+         post.tags.copyright + post.tags.artist + post.tags.invalid +
+         post.tags.lore + post.tags.meta).map { $0.lowercased() }
+    );
 
+    for rawLine in blacklistedArray {
+        // Strip inline comments (space then #)
+        let line: String;
+        if let commentRange = rawLine.range(of: " #") {
+            line = String(rawLine[rawLine.startIndex..<commentRange.lowerBound]).trimmingCharacters(in: .whitespaces);
+        } else {
+            line = rawLine;
+        }
+        // Skip comment-only lines
+        if line.isEmpty || line.hasPrefix("#") { continue; }
+
+        let rawTokens = Set(line.split(separator: " ").map { String($0) }).filter { !$0.isEmpty };
+        if rawTokens.isEmpty { continue; }
+
+        // Parse tokens into required and optional groups
+        var required: [(value: String, negated: Bool)] = [];
+        var optional: [(value: String, negated: Bool)] = [];
+
+        for raw in rawTokens {
+            var t = raw;
+            let isOptional = t.hasPrefix("~");
+            if isOptional { t = String(t.dropFirst()); }
+            let isNegated = t.hasPrefix("-");
+            if isNegated { t = String(t.dropFirst()); }
+            if t.isEmpty { continue; }
+
+            if isOptional {
+                optional.append((t, isNegated));
+            } else {
+                required.append((t, isNegated));
+            }
+        }
+
+        // All required tokens must match (AND logic)
+        var allMatch = true;
+        for req in required {
+            let matches = blacklistTokenMatchesPost(req.value, post: post, tagSet: tagSet);
+            if req.negated ? matches : !matches {
+                allMatch = false;
+                break;
+            }
+        }
+        if !allMatch { continue; }
+
+        // At least one optional token must match (OR logic), if any exist
+        if !optional.isEmpty {
+            var anyMatch = false;
+            for opt in optional {
+                let matches = blacklistTokenMatchesPost(opt.value, post: post, tagSet: tagSet);
+                if opt.negated ? !matches : matches {
+                    anyMatch = true;
+                    break;
+                }
+            }
+            if !anyMatch { continue; }
+        }
+
+        os_log("Post %{public}d blacklisted by: %{public}s", log: .default, post.id, line);
+        return true;
+    }
+    return false;
 }
 
-func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool {
-    var allPostTags = post.tags.general
+private func blacklistTokenMatchesPost(_ token: String, post: PostContent, tagSet: Set<String>) -> Bool {
+    // Metatag handling
+    if let colonIdx = token.firstIndex(of: ":") {
+        let prefix = String(token[token.startIndex..<colonIdx]);
+        let value = String(token[token.index(after: colonIdx)...]);
 
-    allPostTags.append(contentsOf: post.tags.species)
-    allPostTags.append(contentsOf: post.tags.character)
-    allPostTags.append(contentsOf: post.tags.copyright)
-    allPostTags.append(contentsOf: post.tags.artist)
-    allPostTags.append(contentsOf: post.tags.invalid)
-    allPostTags.append(contentsOf: post.tags.lore)
-    allPostTags.append(contentsOf: post.tags.meta)
-
-    // Get post rating and convert it to a tag
-    switch post.rating {
-        case "s":
-            allPostTags.append("rating:safe")
-        case "q":
-            allPostTags.append("rating:questionable")
-        case "e":
-            allPostTags.append("rating:explicit")
+        switch prefix {
+        case "rating":
+            let normalized: String;
+            switch value {
+            case "s", "safe": normalized = "s";
+            case "q", "questionable": normalized = "q";
+            case "e", "explicit": normalized = "e";
+            default: normalized = value;
+            }
+            return post.rating == normalized;
+        case "type":
+            return post.file.ext.lowercased() == value;
+        case "score":
+            return blacklistCompareValue(post.score.total, against: value);
+        case "id":
+            return blacklistCompareValue(post.id, against: value);
+        case "width":
+            return blacklistCompareValue(post.file.width, against: value);
+        case "height":
+            return blacklistCompareValue(post.file.height, against: value);
+        case "favcount":
+            return blacklistCompareValue(post.fav_count, against: value);
+        case "tagcount":
+            let total = post.tags.general.count + post.tags.species.count +
+                post.tags.character.count + post.tags.copyright.count +
+                post.tags.artist.count + post.tags.invalid.count +
+                post.tags.lore.count + post.tags.meta.count;
+            return blacklistCompareValue(total, against: value);
+        case "status":
+            switch value {
+            case "pending": return post.flags.pending;
+            case "flagged": return post.flags.flagged;
+            case "deleted": return post.flags.deleted;
+            default: return false;
+            }
         default:
-            os_log("Unknown rating %{public}s for post %{public}d", log: .default, post.rating, post.id);
+            // Unknown metatag prefix — fall through to tag matching
+            return tagSet.contains(token);
+        }
     }
 
-    return areTagsBlacklisted(blacklistedArray: blacklistedArray, postTags: allPostTags)
+    // Wildcard matching
+    if token.contains("*") {
+        let pattern = "^" + NSRegularExpression.escapedPattern(for: token)
+            .replacingOccurrences(of: "\\*", with: ".*") + "$";
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false; }
+        for tag in tagSet {
+            if regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)) != nil {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Plain tag
+    return tagSet.contains(token);
+}
+
+private func blacklistCompareValue(_ actual: Int, against spec: String) -> Bool {
+    // Range: "10..50"
+    if let dotRange = spec.range(of: "..") {
+        let low = Int(spec[spec.startIndex..<dotRange.lowerBound]);
+        let high = Int(spec[dotRange.upperBound...]);
+        if let lo = low, let hi = high { return actual >= lo && actual <= hi; }
+        return false;
+    }
+    if spec.hasPrefix(">=") || spec.hasPrefix("=>") {
+        if let v = Int(spec.dropFirst(2)) { return actual >= v; }
+    } else if spec.hasPrefix("<=") || spec.hasPrefix("=<") {
+        if let v = Int(spec.dropFirst(2)) { return actual <= v; }
+    } else if spec.hasPrefix(">") {
+        if let v = Int(spec.dropFirst(1)) { return actual > v; }
+    } else if spec.hasPrefix("<") {
+        if let v = Int(spec.dropFirst(1)) { return actual < v; }
+    } else if let v = Int(spec) {
+        return actual == v;
+    }
+    return false;
 }
 
 func fetchJSON<T: Decodable>(_ endpoint: String, logLabel: String) async -> T? {
@@ -113,9 +227,15 @@ func fetchBlacklist() async -> String? {
 func updateBlacklist(tags: String) async -> Bool {
     guard let userData = await fetchUserData() else { return false; }
     let url = "/users/\(userData.id).json";
-    var formSafeChars = CharacterSet.urlQueryAllowed;
-    formSafeChars.remove(charactersIn: "&+=");
-    let encoded = tags.addingPercentEncoding(withAllowedCharacters: formSafeChars) ?? "";
+    // Normalize newlines to CRLF to match HTML form submission behavior
+    let normalized = tags
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "\n")
+        .replacingOccurrences(of: "\n", with: "\r\n");
+    // Strict form-encoding charset per HTML5 spec
+    var formChars = CharacterSet.alphanumerics;
+    formChars.insert(charactersIn: "*-._");
+    let encoded = normalized.addingPercentEncoding(withAllowedCharacters: formChars) ?? "";
     let body = "user[blacklisted_tags]=\(encoded)".data(using: .utf8);
     let data = await makeRequest(destination: url, method: "PATCH", body: body, contentType: "application/x-www-form-urlencoded");
     if data == nil { return false; }
@@ -240,7 +360,7 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
         // If the blacklist is enabled, filter out blacklisted posts
         if (UserDefaults.standard.bool(forKey: UDKey.enableBlacklist)) {
             let blacklistedTags = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
-            let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) };
+            let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
             filteredPosts = filteredPosts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) };
         }
 
