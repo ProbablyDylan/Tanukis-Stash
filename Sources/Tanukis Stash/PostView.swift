@@ -21,7 +21,7 @@ struct PostView: View {
     @State private var favorited: Bool = false;
     @State private var our_score: Int = 2;
     @State private var score_valid: Bool = false;
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
+    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @State private var descExpanded: Bool = true;
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
