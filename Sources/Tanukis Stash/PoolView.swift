@@ -31,8 +31,8 @@ struct PoolView: View {
     // Current post interaction state
     @State private var showImageViewer = false
     @State private var favorited = false
-    @State private var our_score = 0
-    @State private var score_valid = true
+    @State private var our_score = 2
+    @State private var score_valid = false
     @State private var displayToastType = 0
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
@@ -81,8 +81,10 @@ struct PoolView: View {
         }
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
-            favorited = posts[newIndex].is_favorited
-            our_score = 0
+            favorited = posts[newIndex].is_favorited;
+            our_score = 2;
+            score_valid = false;
+            Task { await fetchCurrentPostVote(); }
         }
         .navigationTitle(poolDisplayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -266,11 +268,15 @@ struct PoolView: View {
                         guard let post = currentPost else { return }
                         let wasFavorited = favorited;
                         favorited = !wasFavorited;
+                        posts[currentIndex].is_favorited = !wasFavorited;
                         Task {
                             let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
-                            if !success { favorited = wasFavorited; }
+                            if !success {
+                                favorited = wasFavorited;
+                                posts[currentIndex].is_favorited = wasFavorited;
+                            }
                         }
                     } label: {
                         Image(systemName: favorited ? "heart.fill" : "heart")
@@ -364,6 +370,13 @@ struct PoolView: View {
         if posts.indices.contains(currentIndex) {
             favorited = posts[currentIndex].is_favorited;
         }
+        await fetchCurrentPostVote();
+    }
+
+    private func fetchCurrentPostVote() async {
+        guard let post = currentPost else { return; }
+        our_score = await getVote(postId: post.id);
+        score_valid = true;
     }
 
 }

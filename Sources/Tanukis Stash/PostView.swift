@@ -19,8 +19,8 @@ struct PostView: View {
 
     @State private var displayToastType = 0;
     @State private var favorited: Bool = false;
-    @State private var our_score: Int = 0;
-    @State private var score_valid: Bool = true;
+    @State private var our_score: Int = 2;
+    @State private var score_valid: Bool = false;
     @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     @State private var descExpanded: Bool = true;
     @State private var shareItems: [Any] = [];
@@ -145,9 +145,12 @@ struct PostView: View {
                 }
             }
             .postToast(displayToastType: $displayToastType)
-            .onAppear { favorited = post.is_favorited }
+            .onAppear {
+                favorited = post.is_favorited;
+            }
             .task {
-                await fetchCurrentPostLiked()
+                await fetchCurrentPostLiked();
+                await fetchCurrentPostVote();
             }
             .navigationDestination(item: $selectedArtist) { artist in
                 TagView(tagName: artist)
@@ -160,14 +163,17 @@ struct PostView: View {
 
     func fetchCurrentPostLiked() async {
         do {
-            let url = "/posts/\(post.id).json"
-            let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-            if (data) == nil { return; }
-            let parsedData = try JSONDecoder().decode(Post.self, from: data!)
+            guard let data = await makeRequest(destination: "/posts/\(post.id).json", method: "GET", body: nil, contentType: "application/json") else { return; }
+            let parsedData = try JSONDecoder().decode(Post.self, from: data);
             favorited = parsedData.post.is_favorited;
         } catch {
             os_log("Error fetching post liked state: %{public}s", log: .default, error.localizedDescription);
         }
+    }
+
+    func fetchCurrentPostVote() async {
+        our_score = await getVote(postId: post.id);
+        score_valid = true;
     }
 
 }

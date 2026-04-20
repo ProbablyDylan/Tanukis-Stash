@@ -115,6 +115,7 @@ func tagCacheSyncIfNeeded() async {
                 guard secondLastComma > firstComma else { continue; }
                 let beforeSecondLast = str[str.startIndex..<secondLastComma];
                 guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { continue; }
+                guard thirdLastComma > firstComma else { continue; }
 
                 let id = Int(str[str.startIndex..<firstComma]) ?? 0;
                 let name = String(str[str.index(after: firstComma)..<thirdLastComma]);

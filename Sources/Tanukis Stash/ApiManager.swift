@@ -387,6 +387,29 @@ func unFavoritePost(postId: Int) async -> Bool {
 }
 
 
+func getVote(postId: Int) async -> Int {
+    let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
+    guard let url = URL(string: "https://\(domain)/posts/\(postId)") else { return 0; }
+    var request = URLRequest(url: url);
+    request.addValue(userAgent, forHTTPHeaderField: "User-Agent");
+    if !API_KEY.isEmpty && !username.isEmpty {
+        let AUTH_STRING = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";
+        request.addValue("Basic \(AUTH_STRING)", forHTTPHeaderField: "Authorization");
+    }
+    do {
+        let (data, _) = try await URLSession.shared.data(for: request);
+        let html = String(data: data, encoding: .utf8) ?? "";
+        if html.contains("post-vote-up-\(postId) score-positive") { return 1; }
+        if html.contains("post-vote-down-\(postId) score-negative") { return -1; }
+        return 0;
+    } catch {
+        os_log("getVote failed: %{public}s", log: .default, error.localizedDescription);
+        return 0;
+    }
+}
+
 func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
     let url = "/posts/\(postId)/votes.json"
     let data = await makeRequest(destination: url, method: "POST", body: "score=\(value)&no_unvote=\(no_unvote)".data(using: .utf8), contentType: "application/x-www-form-urlencoded");
