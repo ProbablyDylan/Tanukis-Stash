@@ -17,7 +17,7 @@ struct PostView: View {
     var highlightCommentId: Int? = nil;
     @State var url: String = "";
 
-    @State private var displayToastType = 0;
+    @State private var displayToastType: MediaActionState = .idle;
     @State private var favorited: Bool = false;
     @State private var our_score: Int = 2;
     @State private var score_valid: Bool = false;
@@ -122,7 +122,7 @@ struct PostView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Menu {
                         Button {
-                            Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                            Task { displayToastType = .inProgress; saveFile(post: post, showToast: $displayToastType) }
                         } label: {
                             Label("Save to Photos", systemImage: "square.and.arrow.down")
                         }
@@ -138,16 +138,16 @@ struct PostView: View {
                             Label("Share Content", systemImage: "photo")
                         }
                     } label: {
-                        if displayToastType == -1 || preparingShare {
+                        if displayToastType == .inProgress || preparingShare {
                             ProgressView()
                         } else {
-                            Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
+                            Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
                                 .imageScale(.large)
-                                .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                                .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
                                 .contentTransition(.symbolEffect(.replace))
                         }
                     }
-                    .disabled(displayToastType == -1 || preparingShare)
+                    .disabled(displayToastType == .inProgress || preparingShare)
                 }
             }
             .postToast(displayToastType: $displayToastType)

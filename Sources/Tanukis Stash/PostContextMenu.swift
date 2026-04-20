@@ -7,7 +7,7 @@ struct PostContextMenu: ViewModifier {
     @State private var preparingShare = false;
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
-    @State private var displayToastType: Int = 0;
+    @State private var displayToastType: MediaActionState = .idle;
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
 
     func body(content: Content) -> some View {
@@ -43,7 +43,7 @@ struct PostContextMenu: ViewModifier {
                     Divider()
                 }
                 Button {
-                    displayToastType = -1;
+                    displayToastType = .inProgress;
                     saveFile(post: post, showToast: $displayToastType);
                 } label: {
                     Label("Save to Photos", systemImage: "square.and.arrow.down")

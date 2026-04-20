@@ -184,7 +184,7 @@ func prepareAndShareContent(
     preparingShare: Binding<Bool>,
     shareItems: Binding<[Any]>,
     showShareSheet: Binding<Bool>,
-    displayToastType: Binding<Int>
+    displayToastType: Binding<MediaActionState>
 ) {
     preparingShare.wrappedValue = true;
     Task {
@@ -195,20 +195,20 @@ func prepareAndShareContent(
             preparingShare.wrappedValue = false;
         } catch {
             os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))");
-            preparingShare.wrappedValue = false; displayToastType.wrappedValue = 1;
+            preparingShare.wrappedValue = false; displayToastType.wrappedValue = .errorSaveFailed;
         }
     }
 }
 
-func saveFile(post: PostContent, showToast: Binding<Int>) {
+func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
     Task {
         do {
             guard await ensureAuthorized() else {
-                await MainActor.run { showToast.wrappedValue = 3; }
+                await MainActor.run { showToast.wrappedValue = .errorPhotosPermissionDenied; }
                 return;
             }
 
-            await MainActor.run { showToast.wrappedValue = -1; }
+            await MainActor.run { showToast.wrappedValue = .inProgress; }
 
             let ext = String(post.file.ext);
 
@@ -234,16 +234,16 @@ func saveFile(post: PostContent, showToast: Binding<Int>) {
                 try await saveImageDataToStashAlbum(data: data, uniformTypeIdentifier: "public.image");
             }
 
-            await MainActor.run { showToast.wrappedValue = 2; }
+            await MainActor.run { showToast.wrappedValue = .success; }
 
         } catch DownloadError.noVideoURL {
-            await MainActor.run { showToast.wrappedValue = 5; }
+            await MainActor.run { showToast.wrappedValue = .errorNoVideoAvailable; }
         } catch DownloadError.moveError {
             os_log("%{public}s", log: .default, "saveFile: failed to move downloaded file to documents directory");
-            await MainActor.run { showToast.wrappedValue = 4; }
+            await MainActor.run { showToast.wrappedValue = .errorMoveFailed; }
         } catch {
             os_log("%{public}s", log: .default, "saveFile error: \(String(describing: error))");
-            await MainActor.run { showToast.wrappedValue = 1; }
+            await MainActor.run { showToast.wrappedValue = .errorSaveFailed; }
         }
     }
 }

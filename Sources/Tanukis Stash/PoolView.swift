@@ -33,7 +33,7 @@ struct PoolView: View {
     @State private var favorited = false
     @State private var our_score = 2
     @State private var score_valid = false
-    @State private var displayToastType = 0
+    @State private var displayToastType: MediaActionState = .idle
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
     @State private var preparingShare = false
@@ -315,7 +315,7 @@ struct PoolView: View {
                 Menu {
                     Button {
                         guard let post = currentPost else { return }
-                        Task { displayToastType = -1; saveFile(post: post, showToast: $displayToastType) }
+                        Task { displayToastType = .inProgress; saveFile(post: post, showToast: $displayToastType) }
                     } label: {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
                     }
@@ -332,16 +332,16 @@ struct PoolView: View {
                         Label("Share Content", systemImage: "photo")
                     }
                 } label: {
-                    if displayToastType == -1 || preparingShare {
+                    if displayToastType == .inProgress || preparingShare {
                         ProgressView()
                     } else {
-                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
+                        Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
                             .imageScale(.large)
-                            .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                            .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
-                .disabled(displayToastType == -1 || preparingShare)
+                .disabled(displayToastType == .inProgress || preparingShare)
             }
         }
     }
