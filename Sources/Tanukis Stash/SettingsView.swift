@@ -125,11 +125,12 @@ struct SettingsView: View {
                             HStack {
                                 Text("Save Blacklist")
                                 Spacer()
-                                if isSavingBlacklist || blacklistSaveSuccess != nil {
-                                    Image(systemName: isSavingBlacklist ? "ellipsis.circle.fill" : (blacklistSaveSuccess == true ? "checkmark.circle.fill" : "xmark.circle.fill"))
-                                        .symbolEffect(.pulse, isActive: isSavingBlacklist)
+                                if isSavingBlacklist {
+                                    ProgressView()
+                                } else if let success = blacklistSaveSuccess {
+                                    Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .foregroundColor(success ? .green : .red)
                                         .contentTransition(.symbolEffect(.replace))
-                                        .foregroundColor(isSavingBlacklist ? .secondary : (blacklistSaveSuccess == true ? .green : .red))
                                 }
                             }
                         }

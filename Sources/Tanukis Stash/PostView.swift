@@ -92,6 +92,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
                                 .imageScale(.large)
+                                .contentTransition(.symbolEffect(.replace))
                                 .symbolEffect(.bounce, value: favorited)
                         }
                     }
@@ -102,6 +103,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                                 .imageScale(.large)
+                                .contentTransition(.symbolEffect(.replace))
                                 .symbolEffect(.bounce, value: our_score)
                         }
                         .disabled(!score_valid)
@@ -110,6 +112,7 @@ struct PostView: View {
                         } label: {
                             Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                                 .imageScale(.large)
+                                .contentTransition(.symbolEffect(.replace))
                                 .symbolEffect(.bounce, value: our_score)
                         }
                         .disabled(!score_valid)
@@ -135,11 +138,14 @@ struct PostView: View {
                             Label("Share Content", systemImage: "photo")
                         }
                     } label: {
-                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
-                            .imageScale(.large)
-                            .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
-                            .contentTransition(.symbolEffect(.replace))
-                            .symbolEffect(.pulse, isActive: displayToastType == -1 || preparingShare)
+                        if displayToastType == -1 || preparingShare {
+                            ProgressView()
+                        } else {
+                            Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
+                                .imageScale(.large)
+                                .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                                .contentTransition(.symbolEffect(.replace))
+                        }
                     }
                     .disabled(displayToastType == -1 || preparingShare)
                 }
@@ -350,7 +356,7 @@ struct PoolCard: View {
             async let poolFetch = fetchPool(poolId: poolId);
             async let postFetch = fetchRecentPosts(1, 1, "pool:\(poolId) order:id");
             pool = await poolFetch;
-            firstPost = await postFetch.first;
+            firstPost = await postFetch.posts.first;
         }
     }
 }

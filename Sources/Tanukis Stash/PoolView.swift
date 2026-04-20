@@ -206,7 +206,7 @@ struct PoolView: View {
                 page = 1
                 allLoaded = false
                 pool = await fetchPool(poolId: poolId)
-                posts = await fetchRecentPosts(page, limit, poolTag)
+                posts = await fetchRecentPosts(page, limit, poolTag).posts
                 prefetchThumbnails(for: posts)
             }
             .onAppear {
@@ -256,9 +256,10 @@ struct PoolView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) { showGrid.toggle() }
+                showGrid.toggle()
             } label: {
                 Image(systemName: showGrid ? "square.stack" : "square.grid.2x2")
+                    .contentTransition(.symbolEffect(.replace))
             }
         }
         if !showGrid {
@@ -281,6 +282,7 @@ struct PoolView: View {
                     } label: {
                         Image(systemName: favorited ? "heart.fill" : "heart")
                             .imageScale(.large)
+                            .contentTransition(.symbolEffect(.replace))
                             .symbolEffect(.bounce, value: favorited)
                     }
                 }
@@ -292,6 +294,7 @@ struct PoolView: View {
                     } label: {
                         Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                             .imageScale(.large)
+                            .contentTransition(.symbolEffect(.replace))
                             .symbolEffect(.bounce, value: our_score)
                     }
                     .disabled(!score_valid)
@@ -301,6 +304,7 @@ struct PoolView: View {
                     } label: {
                         Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                             .imageScale(.large)
+                            .contentTransition(.symbolEffect(.replace))
                             .symbolEffect(.bounce, value: our_score)
                     }
                     .disabled(!score_valid)
@@ -328,11 +332,14 @@ struct PoolView: View {
                         Label("Share Content", systemImage: "photo")
                     }
                 } label: {
-                    Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
-                        .imageScale(.large)
-                        .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.pulse, isActive: displayToastType == -1 || preparingShare)
+                    if displayToastType == -1 || preparingShare {
+                        ProgressView()
+                    } else {
+                        Image(systemName: displayToastType == 2 ? "checkmark.circle.fill" : "square.and.arrow.up")
+                            .imageScale(.large)
+                            .foregroundStyle(displayToastType == 2 ? Color.green : Color.primary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
                 }
                 .disabled(displayToastType == -1 || preparingShare)
             }
@@ -348,11 +355,11 @@ struct PoolView: View {
         var currentPage = 1;
 
         while true {
-            let fetched = await fetchRecentPosts(currentPage, limit, poolTag);
-            if fetched.isEmpty { break; }
+            let result = await fetchRecentPosts(currentPage, limit, poolTag);
+            if result.posts.isEmpty { break; }
             let existingIds = Set(allPosts.map { $0.id });
-            allPosts += fetched.filter { !existingIds.contains($0.id) };
-            if fetched.count < limit { break; }
+            allPosts += result.posts.filter { !existingIds.contains($0.id) };
+            if !result.hasMore { break; }
             currentPage += 1;
         }
 
