@@ -334,7 +334,7 @@ func getComment(commentId: Int) async -> CommentContent? {
     return await fetchJSON("/comments/\(commentId).json", logLabel: "comment \(commentId)");
 }
 
-func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostContent] {
+func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> (posts: [PostContent], hasMore: Bool) {
     do {
         let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
         let encoded = tags.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
@@ -348,12 +348,13 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
 
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
 
-        if (data) == nil { 
+        if (data) == nil {
             os_log("Failed to fetch posts", log: .default);
-            return []; 
+            return ([], false);
         }
 
         let parsedData: Posts = try JSONDecoder().decode(Posts.self, from: data!)
+        let hasMore = parsedData.posts.count >= limit;
 
         var filteredPosts = parsedData.posts.filter { $0.preview.url != nil };
 
@@ -364,10 +365,10 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> [PostC
             filteredPosts = filteredPosts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) };
         }
 
-        return filteredPosts;
+        return (filteredPosts, hasMore);
     } catch {
         os_log("Error! %{public}@", log: .default, String(describing: error));
-        return [];
+        return ([], false);
     }
 }
 

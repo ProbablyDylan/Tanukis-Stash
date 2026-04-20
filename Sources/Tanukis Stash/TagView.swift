@@ -17,6 +17,7 @@ struct TagView: View {
     @State private var posts = [PostContent]();
     @State private var page = 1;
     @State private var isLoading: Bool = false;
+    @State private var allLoaded: Bool = false;
     @State private var initialLoadComplete: Bool = false;
     @State private var wikiExpanded: Bool = true;
 
@@ -100,7 +101,7 @@ struct TagView: View {
                     .padding(.vertical, 20)
             }
 
-            PaginatedPostGrid(posts: $posts, search: tagName) {
+            PaginatedPostGrid(posts: $posts, search: tagName, allLoaded: allLoaded) {
                 await loadMorePosts();
             }
         }
@@ -141,10 +142,13 @@ struct TagView: View {
         }
         .refreshable {
             page = 1;
+            allLoaded = false;
             async let wikiFetch = fetchWikiPage(tagName: tagName);
             async let postsFetch = fetchRecentPosts(1, limit, tagName);
             wiki = await wikiFetch;
-            posts = await postsFetch;
+            let result = await postsFetch;
+            posts = result.posts;
+            allLoaded = !result.hasMore;
             prefetchThumbnails(for: posts);
         }
     }
@@ -190,16 +194,21 @@ struct TagView: View {
 
     func loadPosts() async {
         page = 1;
-        posts = await fetchRecentPosts(page, limit, tagName);
+        allLoaded = false;
+        let result = await fetchRecentPosts(page, limit, tagName);
+        posts = result.posts;
+        allLoaded = !result.hasMore;
         initialLoadComplete = true;
         prefetchThumbnails(for: posts);
     }
 
     func loadMorePosts() async {
-        guard !isLoading else { return; }
+        guard !isLoading, !allLoaded else { return; }
         isLoading = true;
         page += 1;
-        posts += await fetchRecentPosts(page, limit, tagName);
+        let result = await fetchRecentPosts(page, limit, tagName);
+        allLoaded = !result.hasMore;
+        posts += result.posts;
         isLoading = false;
         prefetchThumbnails(for: posts);
     }

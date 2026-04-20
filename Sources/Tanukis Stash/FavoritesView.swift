@@ -16,6 +16,7 @@ struct FavoritesView: View {
     @State private var posts = [PostContent]();
     @State private var page = 1;
     @State private var isLoading: Bool = false;
+    @State private var allLoaded: Bool = false;
     @State private var infoText: String = "Loading favorites...";
     @State private var sortOption: FavoriteSortOption = .newest;
     @State private var scrolledPostID: Int?;
@@ -44,7 +45,7 @@ struct FavoritesView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            PaginatedPostGrid(posts: sortedPosts, loadMore: loadMorePosts) { _, post in
+            PaginatedPostGrid(posts: sortedPosts, allLoaded: allLoaded, loadMore: loadMorePosts) { _, post in
                 if let idx = posts.firstIndex(where: { $0.id == post.id }) {
                     NavigationLink(destination: PostView(post: post, search: searchTag)) {
                         PostGridCell(post: post)
@@ -80,7 +81,10 @@ struct FavoritesView: View {
         }
         .refreshable {
             page = 1;
-            posts = await fetchRecentPosts(page, limit, searchTag);
+            allLoaded = false;
+            let result = await fetchRecentPosts(page, limit, searchTag);
+            posts = result.posts;
+            allLoaded = !result.hasMore;
             prefetchThumbnails(for: posts);
         }
     }
@@ -88,7 +92,10 @@ struct FavoritesView: View {
     func loadPosts() async {
         infoText = "Loading favorites...";
         page = 1;
-        posts = await fetchRecentPosts(page, limit, searchTag);
+        allLoaded = false;
+        let result = await fetchRecentPosts(page, limit, searchTag);
+        posts = result.posts;
+        allLoaded = !result.hasMore;
         if posts.count == 0 {
             infoText = "No favorites found";
         }
@@ -96,10 +103,12 @@ struct FavoritesView: View {
     }
 
     func loadMorePosts() async {
-        guard !isLoading else { return; }
+        guard !isLoading, !allLoaded else { return; }
         isLoading = true;
         page += 1;
-        posts += await fetchRecentPosts(page, limit, searchTag);
+        let result = await fetchRecentPosts(page, limit, searchTag);
+        allLoaded = !result.hasMore;
+        posts += result.posts;
         isLoading = false;
         prefetchThumbnails(for: posts);
     }

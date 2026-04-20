@@ -23,6 +23,7 @@ struct SearchView: View {
     @State var infoText: String = ""
     @State private var scrolledPostID: Int?;
     @State private var isLoading: Bool = false;
+    @State private var allLoaded: Bool = false;
 
     var limit = 75;
     var loadingText = "Loading posts...";
@@ -39,7 +40,7 @@ struct SearchView: View {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            PaginatedPostGrid(posts: $posts, search: activeSearch) {
+            PaginatedPostGrid(posts: $posts, search: activeSearch, allLoaded: allLoaded) {
                 await getPosts(append: true);
             }
         }
@@ -123,6 +124,7 @@ struct SearchView: View {
     }
     
     func getPosts(append: Bool) async {
+        if append { guard !allLoaded else { return; } }
         loadTask?.cancel();
         let task = Task {
             isLoading = true;
@@ -131,13 +133,18 @@ struct SearchView: View {
             let newPosts: [PostContent];
             if append {
                 page += 1;
-                newPosts = await fetchRecentPosts(page, limit, activeSearch);
+                let result = await fetchRecentPosts(page, limit, activeSearch);
                 guard !Task.isCancelled else { return; }
+                allLoaded = !result.hasMore;
+                newPosts = result.posts;
                 posts += newPosts;
             } else {
                 page = 1;
-                newPosts = await fetchRecentPosts(page, limit, activeSearch);
+                allLoaded = false;
+                let result = await fetchRecentPosts(page, limit, activeSearch);
                 guard !Task.isCancelled else { return; }
+                allLoaded = !result.hasMore;
+                newPosts = result.posts;
                 posts = newPosts;
             }
 
