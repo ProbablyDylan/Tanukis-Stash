@@ -25,6 +25,7 @@ struct SettingsView: View {
     @State private var suggestionTask: Task<Void, Never>?;
     @State private var isSavingBlacklist: Bool = false;
     @State private var blacklistSaveSuccess: Bool? = nil;
+    @State private var hasLoadedBlacklist: Bool = false;
 
     let sources = ["e926.net", "e621.net"];
     
@@ -54,20 +55,26 @@ struct SettingsView: View {
                                 
                         }
                     } else {
-                        TextField("Username", text: $username).onDisappear() {
-                            UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
-                        }.disabled(AUTHENTICATED).foregroundColor(AUTHENTICATED ? .gray : .primary);
+                        TextField("Username", text: $username)
+                            .onChange(of: username) {
+                                UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
+                            }
+                            .disabled(AUTHENTICATED)
+                            .foregroundColor(AUTHENTICATED ? .gray : .primary);
 
-                        TextField("API Key", text: $API_KEY).onDisappear() {
-                            UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
-                        }.disabled(AUTHENTICATED).foregroundColor(AUTHENTICATED ? .gray : .primary);
+                        TextField("API Key", text: $API_KEY)
+                            .onChange(of: API_KEY) {
+                                UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
+                            }
+                            .disabled(AUTHENTICATED)
+                            .foregroundColor(AUTHENTICATED ? .gray : .primary);
                     }
                     LoginButton(AUTHENTICATED: $AUTHENTICATED, username: $username, API_KEY: $API_KEY)
                 }
 
                 if (AUTHENTICATED) {
                     Section(header: Text("Blacklist")) {
-                        ForEach(Array(blacklistEntries.enumerated()), id: \.offset) { index, entry in
+                        ForEach(Array(blacklistEntries.enumerated()), id: \.element) { index, entry in
                             Text(entry)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -137,6 +144,8 @@ struct SettingsView: View {
                         .disabled(isSavingBlacklist)
                     }
                     .onAppear {
+                        guard !hasLoadedBlacklist else { return; }
+                        hasLoadedBlacklist = true;
                         Task {
                             if let bl = await fetchBlacklist() {
                                 BLACKLIST = bl;
@@ -194,6 +203,9 @@ struct SettingsView: View {
                 Task {
                     await getUserIcon()
                 }
+            }
+            .onChange(of: AUTHENTICATED) { _, newValue in
+                if !newValue { hasLoadedBlacklist = false; }
             }
             .refreshable {
                 if let bl = await fetchBlacklist() {

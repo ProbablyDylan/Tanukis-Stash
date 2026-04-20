@@ -8,7 +8,7 @@ struct PostContextMenu: ViewModifier {
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
     @State private var displayToastType: Int = 0;
-    private let AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
+    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
 
     func body(content: Content) -> some View {
         content

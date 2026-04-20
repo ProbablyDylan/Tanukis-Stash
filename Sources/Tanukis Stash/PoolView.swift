@@ -39,7 +39,7 @@ struct PoolView: View {
     @State private var preparingShare = false
     @State private var selectedArtist: String?
 
-    @State private var AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated)
+    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false
     @Namespace private var gridTransition
 
     private let limit = 75
@@ -353,14 +353,24 @@ struct PoolView: View {
         infoText = "Loading pool...";
         var allPosts: [PostContent] = [];
         var currentPage = 1;
+        let maxPages = 20;
 
-        while true {
+        while currentPage <= maxPages {
+            if Task.isCancelled {
+                isLoading = false;
+                return;
+            }
             let result = await fetchRecentPosts(currentPage, limit, poolTag);
             if result.posts.isEmpty { break; }
             let existingIds = Set(allPosts.map { $0.id });
             allPosts += result.posts.filter { !existingIds.contains($0.id) };
             if !result.hasMore { break; }
             currentPage += 1;
+        }
+
+        if Task.isCancelled {
+            isLoading = false;
+            return;
         }
 
         if allPosts.isEmpty {

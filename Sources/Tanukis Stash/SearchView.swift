@@ -15,7 +15,7 @@ struct SearchView: View {
     @State var search: String;
     @State var page = 1;
     @State var showSettings = false;
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
+    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @Environment(\.dismissSearch) private var dismissSearch;
     @State private var activeSearch: String;
 
@@ -88,9 +88,7 @@ struct SearchView: View {
             }
         }
         #endif
-        .sheet(isPresented: $showSettings, onDismiss: {
-            AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
-        }) {
+        .sheet(isPresented: $showSettings) {
             SettingsView()
         }
         .onChange(of: search) {
