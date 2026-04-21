@@ -26,7 +26,7 @@ extension URLResponse {
 
 func login() async -> Bool {
     let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
-    let API_KEY = Keychain.load(account: UDKey.apiKey) ?? "";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     if username.isEmpty || API_KEY.isEmpty {
         return false;
     }
@@ -390,7 +390,7 @@ func unFavoritePost(postId: Int) async -> Bool {
 
 func getVote(postId: Int) async -> Int {
     let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-    let API_KEY = Keychain.load(account: UDKey.apiKey) ?? "";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     guard let url = URL(string: "https://\(domain)/posts/\(postId)") else { return 0; }
     var request = URLRequest(url: url);
@@ -484,7 +484,7 @@ func prefetchThumbnails(for posts: [PostContent]) {
 
 func makeRequest(destination: String, method: String, body: Data?, contentType: String) async -> Data? {
     let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-    let API_KEY = Keychain.load(account: UDKey.apiKey) ?? "";
+    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     let AUTH_STRING: String = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";
     guard let url = URL(string: "https://\(domain)\(destination)") else {

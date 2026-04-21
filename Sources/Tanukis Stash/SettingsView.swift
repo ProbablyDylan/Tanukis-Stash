@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var username: String = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     @State private var selection: String = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-    @State private var API_KEY: String = Keychain.load(account: UDKey.apiKey) ?? "";
+    @State private var API_KEY: String = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
@@ -64,10 +64,7 @@ struct SettingsView: View {
 
                         TextField("API Key", text: $API_KEY)
                             .onChange(of: API_KEY) {
-                                let trimmed = API_KEY.trimmingCharacters(in: .whitespacesAndNewlines);
-                                if !trimmed.isEmpty {
-                                    Keychain.save(trimmed, account: UDKey.apiKey);
-                                }
+                                UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
                             }
                             .disabled(AUTHENTICATED)
                             .foregroundColor(AUTHENTICATED ? .gray : .primary);
@@ -266,7 +263,7 @@ struct LoginButton: View {
             Button("Login") {
                 Task {
                     UserDefaults.standard.set(username.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.username);
-                    Keychain.save(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), account: UDKey.apiKey);
+                    UserDefaults.standard.set(API_KEY.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.apiKey);
                     AUTHENTICATED = await login();
                     if (!AUTHENTICATED) {
                         ShowAlert.toggle()
