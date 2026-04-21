@@ -12,6 +12,14 @@ struct ContentView: View {
         NavigationStack {
             SearchView(search: "")
                 .task {
+                    // One-time migration: move legacy UserDefaults API key into the Keychain.
+                    if let legacy = UserDefaults.standard.string(forKey: UDKey.apiKey),
+                       !legacy.isEmpty,
+                       Keychain.load(account: UDKey.apiKey) == nil {
+                        Keychain.save(legacy, account: UDKey.apiKey);
+                        UserDefaults.standard.removeObject(forKey: UDKey.apiKey);
+                    }
+
                     let loginStatus = await login();
                     UserDefaults.standard.set(loginStatus, forKey: UDKey.authenticated);
                     if loginStatus {
