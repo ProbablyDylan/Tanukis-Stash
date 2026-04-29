@@ -19,7 +19,9 @@ struct TagView: View {
     @State private var isLoading: Bool = false;
     @State private var allLoaded: Bool = false;
     @State private var initialLoadComplete: Bool = false;
-    @State private var wikiExpanded: Bool = true;
+    @State private var wikiExpanded: Bool = false;
+    @State private var aliasesExpanded: Bool = false;
+    @State private var relatedTagsExpanded: Bool = false;
 
     @State private var search: String = "";
     @State private var searchSuggestions = [TagSuggestion]();
@@ -50,7 +52,7 @@ struct TagView: View {
             }
 
             if !aliases.isEmpty {
-                DisclosureGroup {
+                DisclosureGroup(isExpanded: $aliasesExpanded.animation(.smooth)) {
                     VStack(alignment: .leading) {
                         ForEach(aliases, id: \.id) { alias in
                             NavigationLink(destination: TagView(tagName: alias.antecedent_name)) {
@@ -73,7 +75,7 @@ struct TagView: View {
             }
 
             if !relatedTags.isEmpty {
-                DisclosureGroup {
+                DisclosureGroup(isExpanded: $relatedTagsExpanded.animation(.smooth)) {
                     VStack(alignment: .leading) {
                         ForEach(relatedTags, id: \.self) { tag in
                             NavigationLink(destination: TagView(tagName: tag)) {
@@ -110,6 +112,7 @@ struct TagView: View {
             async let wikiFetch = fetchWikiPage(tagName: tagName);
             async let detailFetch = fetchTagDetail(tagName: tagName);
             async let aliasesFetch = fetchTagAliases(tagName: tagName);
+            async let postsLoad: Void = loadInitialPostsIfNeeded();
 
             wiki = await wikiFetch;
             let detail = await detailFetch;
@@ -122,9 +125,7 @@ struct TagView: View {
                 tagCategories = await fetchTagCategories(names: allNames);
             }
 
-            if posts.count == 0 {
-                await loadPosts();
-            }
+            await postsLoad;
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -190,6 +191,12 @@ struct TagView: View {
 
     func handleSuggestionTap(_ tag: String) {
         search = replaceLastSearchWord(in: search, with: tag);
+    }
+
+    func loadInitialPostsIfNeeded() async {
+        if posts.isEmpty {
+            await loadPosts();
+        }
     }
 
     func loadPosts() async {
