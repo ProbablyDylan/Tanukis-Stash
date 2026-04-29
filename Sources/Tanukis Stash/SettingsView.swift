@@ -26,6 +26,13 @@ struct SettingsView: View {
     @State private var isSavingBlacklist: Bool = false;
     @State private var blacklistSaveSuccess: Bool? = nil;
     @State private var hasLoadedBlacklist: Bool = false;
+    @State private var showClearCacheConfirm: Bool = false;
+    @State private var isClearingCache: Bool = false;
+    @State private var clearCacheSuccess: Bool? = nil;
+    @State private var cacheSizeBytes: UInt = 0;
+    @State private var cacheSizeLoading: Bool = true;
+    @State private var sizeLimitSelection: ImageCacheSizeLimit = ImageCacheConfig.sizeLimit;
+    @State private var expirationSelection: ImageCacheExpiration = ImageCacheConfig.expiration;
 
     let sources = ["e926.net", "e621.net"];
     
@@ -180,6 +187,53 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("Storage"), footer: Text("Cached images speed up browsing. Lower the cap or expiration to save space; clear to free it immediately.")) {
+                    HStack {
+                        Text("Cache Size")
+                        Spacer()
+                        if cacheSizeLoading {
+                            ProgressView()
+                        } else {
+                            Text(ImageCacheConfig.formatBytes(cacheSizeBytes))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Picker("Disk Cap", selection: $sizeLimitSelection) {
+                        ForEach(ImageCacheSizeLimit.allCases) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                    .onChange(of: sizeLimitSelection) {
+                        UserDefaults.standard.set(sizeLimitSelection.rawValue, forKey: UDKey.imageCacheSizeLimit);
+                        ImageCacheConfig.apply();
+                    }
+                    Picker("Expiration", selection: $expirationSelection) {
+                        ForEach(ImageCacheExpiration.allCases) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                    .onChange(of: expirationSelection) {
+                        UserDefaults.standard.set(expirationSelection.rawValue, forKey: UDKey.imageCacheExpirationDays);
+                        ImageCacheConfig.apply();
+                    }
+                    Button(role: .destructive, action: {
+                        showClearCacheConfirm = true;
+                    }) {
+                        HStack {
+                            Text("Clear Image Cache")
+                            Spacer()
+                            if isClearingCache {
+                                ProgressView()
+                            } else if let success = clearCacheSuccess {
+                                Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundColor(success ? .green : .red)
+                                    .contentTransition(.symbolEffect(.replace))
+                            }
+                        }
+                    }
+                    .disabled(isClearingCache || (cacheSizeBytes == 0 && !cacheSizeLoading))
+                }
+
                 Section(header: Text("App Information")) {
                     HStack {
                         Text("Version")
@@ -203,6 +257,9 @@ struct SettingsView: View {
                 Task {
                     await getUserIcon()
                 }
+                Task {
+                    await refreshCacheSize();
+                }
             }
             .onChange(of: AUTHENTICATED) { _, newValue in
                 if !newValue { hasLoadedBlacklist = false; }
@@ -214,7 +271,40 @@ struct SettingsView: View {
                     blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
                 }
             }
+            .alert("Clear Image Cache?", isPresented: $showClearCacheConfirm) {
+                Button("Cancel", role: .cancel) { }
+                Button("Clear", role: .destructive) {
+                    clearImageCache();
+                }
+            } message: {
+                Text("This removes all cached thumbnails and images. They'll re-download as you browse.")
+            }
         }
+    }
+
+    func clearImageCache() {
+        withAnimation { isClearingCache = true; }
+        clearCacheSuccess = nil;
+        let cache = KingfisherManager.shared.cache;
+        cache.clearMemoryCache();
+        cache.clearDiskCache {
+            Task { @MainActor in
+                withAnimation {
+                    isClearingCache = false;
+                    clearCacheSuccess = true;
+                }
+                await refreshCacheSize();
+                try? await Task.sleep(nanoseconds: 2_000_000_000);
+                withAnimation { clearCacheSuccess = nil; }
+            }
+        }
+    }
+
+    func refreshCacheSize() async {
+        cacheSizeLoading = true;
+        let bytes = await ImageCacheConfig.currentDiskSize();
+        cacheSizeBytes = bytes;
+        cacheSizeLoading = false;
     }
 
     func addBlacklistEntry() {

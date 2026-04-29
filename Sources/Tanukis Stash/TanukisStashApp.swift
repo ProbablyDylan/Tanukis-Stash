@@ -9,6 +9,11 @@ import SwiftUI
 
 @main
 struct TanukisStashApp: App {
+    init() {
+        ImageCacheConfig.apply();
+        ImageCacheConfig.cleanExpired();
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
