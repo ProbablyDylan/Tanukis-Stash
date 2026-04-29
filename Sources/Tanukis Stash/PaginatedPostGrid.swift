@@ -35,6 +35,7 @@ struct PaginatedPostGrid<CellContent: View>: View {
         LazyVGrid(columns: postGridColumns) {
             ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
                 cell(i, post)
+                    .transition(.opacity)
                     .onAppear {
                         if i >= posts.count - 36, !loadingMore, !allLoaded {
                             loadingMore = true;

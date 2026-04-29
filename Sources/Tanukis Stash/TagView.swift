@@ -49,6 +49,7 @@ struct TagView: View {
                         .foregroundColor(Color.primary)
                 }
                 .padding(10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if !aliases.isEmpty {
@@ -70,8 +71,8 @@ struct TagView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(Color.primary)
                 }
-                .animation(.smooth, value: aliases.isEmpty)
                 .padding(10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if !relatedTags.isEmpty {
@@ -93,14 +94,15 @@ struct TagView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(Color.primary)
                 }
-                .animation(.smooth, value: relatedTags.isEmpty)
                 .padding(10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if !initialLoadComplete {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
+                    .transition(.opacity)
             }
 
             PaginatedPostGrid(posts: $posts, search: tagName, allLoaded: allLoaded) {
@@ -114,11 +116,17 @@ struct TagView: View {
             async let aliasesFetch = fetchTagAliases(tagName: tagName);
             async let postsLoad: Void = loadInitialPostsIfNeeded();
 
-            wiki = await wikiFetch;
+            let fetchedWiki = await wikiFetch;
+            withAnimation(.smooth) { wiki = fetchedWiki }
+
             let detail = await detailFetch;
             tagDetail = detail;
-            relatedTags = parseRelatedTags(detail?.related_tags).filter { $0 != tagName };
-            aliases = await aliasesFetch;
+            withAnimation(.smooth) {
+                relatedTags = parseRelatedTags(detail?.related_tags).filter { $0 != tagName };
+            }
+
+            let fetchedAliases = await aliasesFetch;
+            withAnimation(.smooth) { aliases = fetchedAliases }
 
             let allNames = relatedTags + aliases.map { $0.antecedent_name };
             if !allNames.isEmpty {
@@ -146,10 +154,11 @@ struct TagView: View {
             allLoaded = false;
             async let wikiFetch = fetchWikiPage(tagName: tagName);
             async let postsFetch = fetchRecentPosts(1, limit, tagName);
-            wiki = await wikiFetch;
+            let fetchedWiki = await wikiFetch;
+            withAnimation(.smooth) { wiki = fetchedWiki }
             let result = await postsFetch;
-            posts = result.posts;
             allLoaded = !result.hasMore;
+            withAnimation(.smooth) { posts = result.posts }
             prefetchThumbnails(for: posts);
         }
     }
@@ -203,9 +212,11 @@ struct TagView: View {
         page = 1;
         allLoaded = false;
         let result = await fetchRecentPosts(page, limit, tagName);
-        posts = result.posts;
         allLoaded = !result.hasMore;
-        initialLoadComplete = true;
+        withAnimation(.smooth) {
+            posts = result.posts;
+            initialLoadComplete = true;
+        }
         prefetchThumbnails(for: posts);
     }
 
@@ -215,7 +226,7 @@ struct TagView: View {
         page += 1;
         let result = await fetchRecentPosts(page, limit, tagName);
         allLoaded = !result.hasMore;
-        posts += result.posts;
+        withAnimation(.smooth) { posts += result.posts }
         isLoading = false;
         prefetchThumbnails(for: posts);
     }
