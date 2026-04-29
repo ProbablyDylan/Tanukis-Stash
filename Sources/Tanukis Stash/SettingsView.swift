@@ -17,15 +17,8 @@ struct SettingsView: View {
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
-    @State private var BLACKLIST: String = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: UDKey.userIcon) ?? "";
-    @State private var blacklistEntries: [String] = [];
-    @State private var newBlacklistTag: String = "";
-    @State private var tagSuggestions: [TagSuggestion] = [];
-    @State private var suggestionTask: Task<Void, Never>?;
-    @State private var isSavingBlacklist: Bool = false;
-    @State private var blacklistSaveSuccess: Bool? = nil;
-    @State private var hasLoadedBlacklist: Bool = false;
+    @State private var showingBlacklistEditor: Bool = false;
     @State private var showClearCacheConfirm: Bool = false;
     @State private var isClearingCache: Bool = false;
     @State private var clearCacheSuccess: Bool? = nil;
@@ -81,83 +74,21 @@ struct SettingsView: View {
 
                 if (AUTHENTICATED) {
                     Section(header: Text("Blacklist")) {
-                        ForEach(Array(blacklistEntries.enumerated()), id: \.element) { index, entry in
-                            Text(entry)
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        blacklistEntries.remove(at: index);
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                        }
-                        HStack {
-                            TextField("Add tag...", text: $newBlacklistTag)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
-                                .onChange(of: newBlacklistTag) {
-                                    debouncedTagSuggestion(query: newBlacklistTag, task: &suggestionTask, results: $tagSuggestions);
-                                }
-                                .onSubmit {
-                                    addBlacklistEntry();
-                                }
-                            Button(action: {
-                                addBlacklistEntry();
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundColor(.accentColor)
+                        Toggle("Enable Blacklist", isOn: $ENABLE_BLACKLIST)
+                            .toggleStyle(.switch)
+                            .onChange(of: ENABLE_BLACKLIST) {
+                                UserDefaults.standard.set(ENABLE_BLACKLIST, forKey: UDKey.enableBlacklist);
                             }
-                            .disabled(newBlacklistTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                        if !tagSuggestions.isEmpty {
-                            ForEach(tagSuggestions, id: \.self) { tag in
-                                Button(action: {
-                                    newBlacklistTag = tag.name;
-                                    tagSuggestions = [];
-                                }) {
-                                    Text(tag.name)
-                                        .foregroundColor(tagCategoryColor(tag.category))
+                        if ENABLE_BLACKLIST {
+                            Button(action: { showingBlacklistEditor = true; }) {
+                                HStack {
+                                    Text("Manage Blacklist…")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(.secondary)
                                 }
-                            }
-                        }
-                        Button(action: {
-                            isSavingBlacklist = true;
-                            blacklistSaveSuccess = nil;
-                            Task {
-                                let tags = blacklistEntries.joined(separator: "\n");
-                                let success = await updateBlacklist(tags: tags);
-                                if success {
-                                    BLACKLIST = tags;
-                                    UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
-                                }
-                                isSavingBlacklist = false;
-                                blacklistSaveSuccess = success;
-                                try? await Task.sleep(nanoseconds: 2_000_000_000);
-                                blacklistSaveSuccess = nil;
-                            }
-                        }) {
-                            HStack {
-                                Text("Save Blacklist")
-                                Spacer()
-                                if isSavingBlacklist {
-                                    ProgressView()
-                                } else if let success = blacklistSaveSuccess {
-                                    Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        .foregroundColor(success ? .green : .red)
-                                        .contentTransition(.symbolEffect(.replace))
-                                }
-                            }
-                        }
-                        .disabled(isSavingBlacklist)
-                    }
-                    .onAppear {
-                        guard !hasLoadedBlacklist else { return; }
-                        hasLoadedBlacklist = true;
-                        Task {
-                            if let bl = await fetchBlacklist() {
-                                BLACKLIST = bl;
-                                UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
-                                blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
                             }
                         }
                     }
@@ -178,13 +109,6 @@ struct SettingsView: View {
                         .onChange(of: ENABLE_AIRPLAY) {
                             UserDefaults.standard.set(ENABLE_AIRPLAY, forKey: UDKey.enableAirplay);
                         }
-                    if (AUTHENTICATED) {
-                        Toggle("Enable Blacklist", isOn: $ENABLE_BLACKLIST)
-                            .toggleStyle(.switch)
-                            .onChange(of: ENABLE_BLACKLIST) {
-                                UserDefaults.standard.set(ENABLE_BLACKLIST, forKey: UDKey.enableBlacklist);
-                            }
-                    }
                 }
 
                 Section(header: Text("Storage"), footer: Text("Cached images speed up browsing. Lower the cap or expiration to save space; clear to free it immediately.")) {
@@ -261,15 +185,13 @@ struct SettingsView: View {
                     await refreshCacheSize();
                 }
             }
-            .onChange(of: AUTHENTICATED) { _, newValue in
-                if !newValue { hasLoadedBlacklist = false; }
-            }
             .refreshable {
                 if let bl = await fetchBlacklist() {
-                    BLACKLIST = bl;
-                    UserDefaults.standard.set(BLACKLIST, forKey: UDKey.userBlacklist);
-                    blacklistEntries = BLACKLIST.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
+                    UserDefaults.standard.set(bl, forKey: UDKey.userBlacklist);
                 }
+            }
+            .sheet(isPresented: $showingBlacklistEditor) {
+                BlacklistEditorView()
             }
             .alert("Clear Image Cache?", isPresented: $showClearCacheConfirm) {
                 Button("Cancel", role: .cancel) { }
@@ -305,15 +227,6 @@ struct SettingsView: View {
         let bytes = await ImageCacheConfig.currentDiskSize();
         cacheSizeBytes = bytes;
         cacheSizeLoading = false;
-    }
-
-    func addBlacklistEntry() {
-        let tag = newBlacklistTag.trimmingCharacters(in: .whitespacesAndNewlines);
-        if !tag.isEmpty {
-            blacklistEntries.append(tag);
-            newBlacklistTag = "";
-            tagSuggestions = [];
-        }
     }
 
     func getUserIcon() async {
