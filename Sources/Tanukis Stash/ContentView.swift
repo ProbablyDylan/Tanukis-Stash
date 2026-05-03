@@ -19,7 +19,7 @@ struct ContentView: View {
                             UserDefaults.standard.set(blacklist.trimmingCharacters(in: .whitespacesAndNewlines), forKey: UDKey.userBlacklist);
                         }
                     }
-                    await tagCacheSyncIfNeeded();
+                    await tagCacheSync();
                 }
         }
     }

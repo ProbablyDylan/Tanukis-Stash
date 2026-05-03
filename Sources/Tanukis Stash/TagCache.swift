@@ -14,6 +14,7 @@ struct CachedTag: Codable, FetchableRecord, PersistableRecord, Sendable {
     let name: String;
     let postCount: Int;
     let category: Int;
+    let syncVersion: Int;
 }
 
 private let _tagDBLock = NSLock();
@@ -35,10 +36,13 @@ func openTagDatabase() throws -> DatabaseQueue {
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 postCount INTEGER NOT NULL,
-                category INTEGER NOT NULL
+                category INTEGER NOT NULL,
+                syncVersion INTEGER NOT NULL DEFAULT 0
             )
         """);
         try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)");
+        // Migration for existing databases (no-op if column already exists)
+        try? db.execute(sql: "ALTER TABLE tags ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0");
     }
     _tagDB = db;
     return db;
@@ -67,11 +71,7 @@ func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
     }
 }
 
-func tagCacheSyncIfNeeded() async {
-    let lastSync = UserDefaults.standard.double(forKey: UDKey.tagCacheLastSync);
-    let now = Date().timeIntervalSince1970;
-    if now - lastSync < 86400 && isTagCachePopulated() { return; }
-
+func tagCacheSync() async {
     let formatter = DateFormatter();
     formatter.dateFormat = "yyyy-MM-dd";
     formatter.timeZone = TimeZone(identifier: "America/New_York");
@@ -96,42 +96,69 @@ func tagCacheSyncIfNeeded() async {
         return;
     }
 
+    let syncVersion = Int(Date().timeIntervalSince1970);
+    let chunkSize = 5000;
+
     do {
         let db = try openTagDatabase();
-        let lines = csvString.split(separator: "\n", omittingEmptySubsequences: true);
+        let lines = csvString.split(separator: "\n", omittingEmptySubsequences: true).dropFirst();
+        var totalUpserted = 0;
+        var buffer: [(Int, String, Int, Int)] = [];
+        buffer.reserveCapacity(chunkSize);
 
-        try await db.write { db in
-            try db.execute(sql: "DELETE FROM tags");
-            // Skip header line
-            for line in lines.dropFirst() {
-                let str = String(line);
-                // CSV format: id,name,category,post_count,is_locked
-                // Parse from ends inward since only name can contain commas
-                guard let firstComma = str.firstIndex(of: ",") else { continue; }
-                guard let lastComma = str.lastIndex(of: ",") else { continue; }
-                guard lastComma > firstComma else { continue; }
-                let beforeLast = str[str.startIndex..<lastComma];
-                guard let secondLastComma = beforeLast.lastIndex(of: ",") else { continue; }
-                guard secondLastComma > firstComma else { continue; }
-                let beforeSecondLast = str[str.startIndex..<secondLastComma];
-                guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { continue; }
-                guard thirdLastComma > firstComma else { continue; }
+        for line in lines {
+            let str = String(line);
+            // CSV format: id,name,category,post_count,is_locked
+            // Parse from ends inward since only name can contain commas
+            guard let firstComma = str.firstIndex(of: ",") else { continue; }
+            guard let lastComma = str.lastIndex(of: ",") else { continue; }
+            guard lastComma > firstComma else { continue; }
+            let beforeLast = str[str.startIndex..<lastComma];
+            guard let secondLastComma = beforeLast.lastIndex(of: ",") else { continue; }
+            guard secondLastComma > firstComma else { continue; }
+            let beforeSecondLast = str[str.startIndex..<secondLastComma];
+            guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { continue; }
+            guard thirdLastComma > firstComma else { continue; }
 
-                let id = Int(str[str.startIndex..<firstComma]) ?? 0;
-                let name = String(str[str.index(after: firstComma)..<thirdLastComma]);
-                let category = Int(str[str.index(after: thirdLastComma)..<secondLastComma]) ?? 0;
-                let postCount = Int(str[str.index(after: secondLastComma)..<lastComma]) ?? 0;
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO tags (id, name, postCount, category) VALUES (?, ?, ?, ?)",
-                    arguments: [id, name, postCount, category]
-                );
+            let id = Int(str[str.startIndex..<firstComma]) ?? 0;
+            let name = String(str[str.index(after: firstComma)..<thirdLastComma]);
+            let category = Int(str[str.index(after: thirdLastComma)..<secondLastComma]) ?? 0;
+            let postCount = Int(str[str.index(after: secondLastComma)..<lastComma]) ?? 0;
+
+            buffer.append((id, name, postCount, category));
+
+            if buffer.count >= chunkSize {
+                try await flushChunk(db: db, rows: buffer, syncVersion: syncVersion);
+                totalUpserted += buffer.count;
+                buffer.removeAll(keepingCapacity: true);
             }
         }
+        if !buffer.isEmpty {
+            try await flushChunk(db: db, rows: buffer, syncVersion: syncVersion);
+            totalUpserted += buffer.count;
+        }
 
-        UserDefaults.standard.set(now, forKey: UDKey.tagCacheLastSync);
-        os_log("Tag cache synced with %{public}d tags", log: .default, lines.count - 1);
+        // Sweep deletions: any row whose syncVersion didn't get bumped to the current run is gone upstream.
+        let deleted: Int = try await db.write { db in
+            try db.execute(sql: "DELETE FROM tags WHERE syncVersion != ?", arguments: [syncVersion]);
+            return db.changesCount;
+        };
+
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UDKey.tagCacheLastSync);
+        os_log("Tag cache synced: upserted %{public}d, deleted %{public}d", log: .default, totalUpserted, deleted);
     } catch {
         os_log("Tag cache sync failed: %{public}s", log: .default, error.localizedDescription);
+    }
+}
+
+private func flushChunk(db: DatabaseQueue, rows: [(Int, String, Int, Int)], syncVersion: Int) async throws {
+    try await db.write { db in
+        for (id, name, postCount, category) in rows {
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO tags (id, name, postCount, category, syncVersion) VALUES (?, ?, ?, ?, ?)",
+                arguments: [id, name, postCount, category, syncVersion]
+            );
+        }
     }
 }
 

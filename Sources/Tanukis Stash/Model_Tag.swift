@@ -10,6 +10,7 @@ import SwiftUI
 struct TagSuggestion: Hashable {
     let name: String;
     let category: Int;
+    let postCount: Int;
 }
 
 struct TagContent: Decodable {

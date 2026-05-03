@@ -250,7 +250,7 @@ func fetchTags(_ text: String) async -> [TagSuggestion] {
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
         if (data) == nil { return []; }
         let tags: [TagContent] = try JSONDecoder().decode([TagContent].self, from: data!)
-        return tags.map { TagSuggestion(name: $0.name, category: $0.category) };
+        return tags.map { TagSuggestion(name: $0.name, category: $0.category, postCount: $0.post_count) };
     } catch {
         return [];
     }
@@ -285,32 +285,16 @@ func parseSearch(_ searchText: String) -> String {
 ) {
     task?.cancel();
     let lastWord = parseSearch(query);
-    guard lastWord.count >= 2 else {
-        // Keep existing suggestions while typing a new word in a multi-tag query
+    guard lastWord.count >= 1 else {
         if !query.contains(" ") {
             results.wrappedValue = [];
         }
         return;
     }
-    task = Task {
-        try? await Task.sleep(for: .milliseconds(80));
-        guard !Task.isCancelled else { return; }
-        let suggestions = await createTagList(query);
-        guard !Task.isCancelled else { return; }
-        results.wrappedValue = suggestions;
+    let cached = searchLocalTags(lastWord);
+    results.wrappedValue = cached.map {
+        TagSuggestion(name: $0.name, category: $0.category, postCount: $0.postCount)
     };
-}
-
-func createTagList(_ search: String) async -> [TagSuggestion] {
-    let newSearchText = parseSearch(search);
-    if(newSearchText.count >= 3) {
-        let cached = searchLocalTags(newSearchText);
-        if !cached.isEmpty {
-            return cached.map { TagSuggestion(name: $0.name, category: $0.category) };
-        }
-        return await fetchTags(newSearchText);
-    }
-    return []
 }
 
 func getPost(postId: Int) async -> PostContent? {
