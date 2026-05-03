@@ -285,7 +285,7 @@ func parseSearch(_ searchText: String) -> String {
 ) {
     task?.cancel();
     let lastWord = parseSearch(query);
-    guard lastWord.count >= 3 else {
+    guard lastWord.count >= 2 else {
         // Keep existing suggestions while typing a new word in a multi-tag query
         if !query.contains(" ") {
             results.wrappedValue = [];
@@ -293,7 +293,7 @@ func parseSearch(_ searchText: String) -> String {
         return;
     }
     task = Task {
-        try? await Task.sleep(for: .milliseconds(150));
+        try? await Task.sleep(for: .milliseconds(80));
         guard !Task.isCancelled else { return; }
         let suggestions = await createTagList(query);
         guard !Task.isCancelled else { return; }

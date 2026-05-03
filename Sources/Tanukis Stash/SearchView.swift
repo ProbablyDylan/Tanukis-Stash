@@ -63,12 +63,16 @@ struct SearchView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isSearchActive && !searchSuggestions.isEmpty {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                    .padding(.top, 24)
                     .background {
                         Rectangle()
                             .fill(.ultraThinMaterial)
                             .mask(
                                 LinearGradient(
-                                    colors: [.clear, .black],
+                                    stops: [
+                                        .init(color: .clear, location: 0.0),
+                                        .init(color: .black, location: 0.4),
+                                    ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )

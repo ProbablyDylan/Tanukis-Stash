@@ -16,13 +16,13 @@ struct ChipBar: View {
                 ForEach(displayed, id: \.self) { tag in
                     Button(action: { onTap(tag); }) {
                         Text(tag.name)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .tint(tagCategoryColor(tag.category))
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 12)
