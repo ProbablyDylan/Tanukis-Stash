@@ -63,7 +63,18 @@ struct SearchView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isSearchActive && !searchSuggestions.isEmpty {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip)
-                    .background(.bar)
+                    .background {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .mask(
+                                LinearGradient(
+                                    colors: [.clear, .black],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .ignoresSafeArea(edges: .bottom)
+                    }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -165,6 +176,7 @@ struct SearchView: View {
     
     func applyChip(_ tag: TagSuggestion) {
         search = replaceLastSearchWord(in: search, with: tag.name) + " ";
+        withAnimation(.snappy) { searchSuggestions.removeAll { $0 == tag }; }
     }
 
 }

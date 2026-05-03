@@ -41,7 +41,9 @@ struct ChipBar: View {
                 endPoint: .trailing
             )
         )
-        .onAppear { displayed = suggestions; }
+        .onAppear {
+            withAnimation(.snappy) { displayed = suggestions; }
+        }
         .onChange(of: suggestions) { _, new in
             withAnimation(.snappy) { displayed = new; }
         }
