@@ -139,23 +139,15 @@ func tagCacheSync() async {
         var parseSkipped = 0;
 
         for line in lines {
-            let str = String(line);
-            // CSV format: id,name,category,post_count,is_locked
-            // Parse from ends inward since only name can contain commas
-            guard let firstComma = str.firstIndex(of: ",") else { parseSkipped += 1; continue; }
-            guard let lastComma = str.lastIndex(of: ",") else { parseSkipped += 1; continue; }
-            guard lastComma > firstComma else { parseSkipped += 1; continue; }
-            let beforeLast = str[str.startIndex..<lastComma];
-            guard let secondLastComma = beforeLast.lastIndex(of: ",") else { parseSkipped += 1; continue; }
-            guard secondLastComma > firstComma else { parseSkipped += 1; continue; }
-            let beforeSecondLast = str[str.startIndex..<secondLastComma];
-            guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { parseSkipped += 1; continue; }
-            guard thirdLastComma > firstComma else { parseSkipped += 1; continue; }
-
-            let id = Int(str[str.startIndex..<firstComma]) ?? 0;
-            let name = String(str[str.index(after: firstComma)..<thirdLastComma]);
-            let category = Int(str[str.index(after: thirdLastComma)..<secondLastComma]) ?? 0;
-            let postCount = Int(str[str.index(after: secondLastComma)..<lastComma]) ?? 0;
+            let fields = line.split(separator: ",", omittingEmptySubsequences: false);
+            guard fields.count == 4 || fields.count == 5 else {
+                parseSkipped += 1;
+                continue;
+            }
+            let id = Int(fields[0]) ?? 0;
+            let name = String(fields[1]);
+            let category = Int(fields[2]) ?? 0;
+            let postCount = Int(fields[3]) ?? 0;
 
             buffer.append((id, name, postCount, category));
 
