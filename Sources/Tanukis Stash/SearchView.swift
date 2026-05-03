@@ -164,7 +164,9 @@ struct SearchView: View {
     
     func applyChip(_ tag: TagSuggestion) {
         search = replaceLastSearchWord(in: search, with: tag.name) + " ";
-        withAnimation(.snappy) { searchSuggestions.removeAll { $0 == tag }; }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+            searchSuggestions.removeAll { $0 == tag };
+        }
     }
 
 }

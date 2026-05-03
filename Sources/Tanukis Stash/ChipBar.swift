@@ -22,7 +22,10 @@ struct ChipBar: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .tint(tagCategoryColor(tag.category))
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .scale(scale: 1.4).combined(with: .opacity)
+                    ))
                 }
             }
             .padding(.horizontal, 12)
