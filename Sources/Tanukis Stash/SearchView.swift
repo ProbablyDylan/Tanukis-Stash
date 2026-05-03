@@ -24,6 +24,7 @@ struct SearchView: View {
     @State private var scrolledPostID: Int?;
     @State private var isLoading: Bool = false;
     @State private var allLoaded: Bool = false;
+    @State private var isSearchActive: Bool = false;
 
     var limit = 75;
     var loadingText = "Loading posts...";
@@ -36,6 +37,7 @@ struct SearchView: View {
     
     var postGrid: some View {
         ScrollView(.vertical) {
+            SearchActiveReader(isActive: $isSearchActive)
             if(posts.count == 0) {
                 ProgressView(infoText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,18 +59,16 @@ struct SearchView: View {
 
     var body: some View {
         postGrid
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(activeSearch.isEmpty ? "Recent" : "Results")
-        .searchable(text: $search, prompt: "Search for tags") {
-            ForEach(searchSuggestions, id: \.self) { tag in
-                Button(action: {
-                    updateSearch(tag.name);
-                }) {
-                    Text(tag.name)
-                        .foregroundColor(tagCategoryColor(tag.category));
-                }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isSearchActive && !searchSuggestions.isEmpty {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                    .background(.bar)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(activeSearch.isEmpty ? "Recent" : "Results")
+        .searchable(text: $search, prompt: "Search for tags")
         .navigationDestination(item: $navigateToTagName) { tagName in
             TagView(tagName: tagName, searchEnabled: true)
         }
@@ -94,7 +94,7 @@ struct SearchView: View {
         .onChange(of: search) {
             if search.isEmpty && !activeSearch.isEmpty {
                 suggestionTask?.cancel();
-                searchSuggestions = [];
+                withAnimation(.snappy) { searchSuggestions = []; }
                 activeSearch = "";
                 posts = [];
                 Task {
@@ -114,7 +114,7 @@ struct SearchView: View {
                 posts = [];
                 Task.init {
                     await getPosts(append: false);
-                    searchSuggestions.removeAll();
+                    withAnimation(.snappy) { searchSuggestions.removeAll(); }
                     dismissSearch();
                 }
             }
@@ -159,7 +159,11 @@ struct SearchView: View {
     func updateSearch(_ tag: String) {
         search = replaceLastSearchWord(in: search, with: tag);
     }
-    
+
+    func applyChip(_ tag: TagSuggestion) {
+        search = replaceLastSearchWord(in: search, with: tag.name) + " ";
+    }
+
 }
 
 struct PostPreviewFrame: View {
@@ -171,5 +175,18 @@ struct PostPreviewFrame: View {
             PostGridCell(post: post)
         }
         .postContextMenu(post: $post)
+    }
+}
+
+struct SearchActiveReader: View {
+    @Environment(\.isSearching) private var isSearching;
+    @Binding var isActive: Bool;
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onChange(of: isSearching) { _, new in
+                withAnimation(.snappy) { isActive = new; }
+            }
     }
 }
