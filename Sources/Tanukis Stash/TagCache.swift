@@ -100,16 +100,18 @@ func tagCacheSync() async {
         if let data = data {
             csvData = decompressGzip(data);
             if csvData != nil {
-                os_log("Downloaded tag export for %{public}s (%{public}d bytes compressed)", log: .default, dateStr, data.count);
+                os_log("TagCache.sync: downloaded export for %{public}s (%{public}d bytes compressed)", log: .default, dateStr, data.count);
                 break;
             }
         }
     }
 
     guard let csv = csvData, let csvString = String(data: csv, encoding: .utf8) else {
-        os_log("Failed to download or decompress tag export", log: .default);
+        os_log("TagCache.sync: failed to download or decompress tag export (no usable CSV)", log: .default);
         return;
     }
+
+    os_log("TagCache.sync: decompressed CSV size = %{public}d bytes", log: .default, csv.count);
 
     let syncVersion = Int(Date().timeIntervalSince1970);
     let chunkSize = 5000;
@@ -123,23 +125,25 @@ func tagCacheSync() async {
 
         let db = try openTagDatabase();
         let lines = csvString.split(separator: "\n", omittingEmptySubsequences: true).dropFirst();
+        os_log("TagCache.sync: CSV has %{public}d lines (after dropping header)", log: .default, lines.count);
         var totalUpserted = 0;
         var buffer: [(Int, String, Int, Int)] = [];
         buffer.reserveCapacity(chunkSize);
+        var parseSkipped = 0;
 
         for line in lines {
             let str = String(line);
             // CSV format: id,name,category,post_count,is_locked
             // Parse from ends inward since only name can contain commas
-            guard let firstComma = str.firstIndex(of: ",") else { continue; }
-            guard let lastComma = str.lastIndex(of: ",") else { continue; }
-            guard lastComma > firstComma else { continue; }
+            guard let firstComma = str.firstIndex(of: ",") else { parseSkipped += 1; continue; }
+            guard let lastComma = str.lastIndex(of: ",") else { parseSkipped += 1; continue; }
+            guard lastComma > firstComma else { parseSkipped += 1; continue; }
             let beforeLast = str[str.startIndex..<lastComma];
-            guard let secondLastComma = beforeLast.lastIndex(of: ",") else { continue; }
-            guard secondLastComma > firstComma else { continue; }
+            guard let secondLastComma = beforeLast.lastIndex(of: ",") else { parseSkipped += 1; continue; }
+            guard secondLastComma > firstComma else { parseSkipped += 1; continue; }
             let beforeSecondLast = str[str.startIndex..<secondLastComma];
-            guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { continue; }
-            guard thirdLastComma > firstComma else { continue; }
+            guard let thirdLastComma = beforeSecondLast.lastIndex(of: ",") else { parseSkipped += 1; continue; }
+            guard thirdLastComma > firstComma else { parseSkipped += 1; continue; }
 
             let id = Int(str[str.startIndex..<firstComma]) ?? 0;
             let name = String(str[str.index(after: firstComma)..<thirdLastComma]);
@@ -159,6 +163,8 @@ func tagCacheSync() async {
             totalUpserted += buffer.count;
         }
 
+        os_log("TagCache.sync: parsed %{public}d rows, skipped %{public}d malformed rows", log: .default, totalUpserted, parseSkipped);
+
         // Sweep deletions: any row whose syncVersion didn't get bumped to the current run is gone upstream.
         let deleted: Int = try await db.write { db in
             try db.execute(sql: "DELETE FROM tags WHERE syncVersion != ?", arguments: [syncVersion]);
@@ -166,13 +172,13 @@ func tagCacheSync() async {
         };
 
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UDKey.tagCacheLastSync);
-        os_log("Tag cache synced: upserted %{public}d, deleted %{public}d", log: .default, totalUpserted, deleted);
+        os_log("TagCache.sync: completed — upserted %{public}d, deleted %{public}d", log: .default, totalUpserted, deleted);
         let postCount: Int = (try? await db.read { db in
             (try? Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags")) ?? -1
         }) ?? -1;
         os_log("TagCache.sync: post-sync row count = %{public}d", log: .default, postCount);
     } catch {
-        os_log("Tag cache sync failed: %{public}s", log: .default, error.localizedDescription);
+        os_log("TagCache.sync: caught error — %{public}s", log: .default, error.localizedDescription);
     }
 }
 
