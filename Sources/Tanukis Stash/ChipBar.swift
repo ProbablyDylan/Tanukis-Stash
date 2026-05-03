@@ -5,6 +5,9 @@
 
 import SwiftUI
 
+private let chipPopAnimation: Animation = .spring(response: 0.35, dampingFraction: 0.55);
+private let chipPopCleanupDelay: TimeInterval = 0.6; // must exceed chipPopAnimation settle time
+
 struct ChipBar: View {
     let suggestions: [TagSuggestion];
     let onTap: (TagSuggestion) -> Void;
@@ -55,7 +58,7 @@ struct ChipBar: View {
             if popping.isEmpty {
                 withAnimation(.snappy) { displayed = new; }
             } else {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) { displayed = new; }
+                withAnimation(chipPopAnimation) { displayed = new; }
             }
         }
     }
@@ -66,7 +69,7 @@ struct ChipBar: View {
         // .transition modifier captures the pop variant before the chip leaves.
         DispatchQueue.main.async {
             onTap(tag);
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + chipPopCleanupDelay) {
                 popping.remove(tag);
             }
         }

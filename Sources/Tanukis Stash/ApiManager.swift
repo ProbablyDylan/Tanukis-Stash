@@ -286,9 +286,7 @@ func parseSearch(_ searchText: String) -> String {
     task?.cancel();
     let lastWord = parseSearch(query);
     guard lastWord.count >= 1 else {
-        if !query.contains(" ") {
-            results.wrappedValue = [];
-        }
+        results.wrappedValue = [];
         return;
     }
     let cached = searchLocalTags(lastWord);
