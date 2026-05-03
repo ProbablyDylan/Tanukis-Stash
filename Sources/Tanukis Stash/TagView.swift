@@ -26,6 +26,7 @@ struct TagView: View {
     @State private var search: String = "";
     @State private var searchSuggestions = [TagSuggestion]();
     @State private var suggestionTask: Task<Void, Never>?;
+    @State private var isSearchActive: Bool = false;
     @State private var navigateToTagName: String?;
     @State private var navigateToSearch: String?;
     @State private var scrolledPostID: Int?;
@@ -38,6 +39,8 @@ struct TagView: View {
 
     var tagContent: some View {
         ScrollView(.vertical) {
+            // Must remain an eager child of the .searchable hierarchy — LazyVStack/LazyVGrid would suppress \.isSearching.
+            SearchActiveReader(isActive: $isSearchActive)
             if let wiki = wiki, !wiki.body.isEmpty {
                 DisclosureGroup(isExpanded: $wikiExpanded.animation(.smooth)) {
                     DTextView(text: wiki.body)
@@ -167,16 +170,21 @@ struct TagView: View {
     var body: some View {
         if searchEnabled {
             tagContent
-                .searchable(text: $search, prompt: "Search for tags") {
-                    ForEach(searchSuggestions, id: \.self) { tag in
-                        Button(action: { handleSuggestionTap(tag.name); }) {
-                            Text(tag.name)
-                                .foregroundColor(tagCategoryColor(tag.category));
-                        }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if isSearchActive && !searchSuggestions.isEmpty {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
+                .searchable(text: $search, prompt: "Search for tags")
                 .onChange(of: search) {
                     debouncedTagSuggestion(query: search, task: &suggestionTask, results: $searchSuggestions);
+                }
+                .onChange(of: isSearchActive) { _, active in
+                    if !active {
+                        suggestionTask?.cancel();
+                        withAnimation(.snappy) { searchSuggestions = []; }
+                    }
                 }
                 .onSubmit(of: .search) {
                     let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines);
@@ -185,6 +193,7 @@ struct TagView: View {
                     } else {
                         navigateToSearch = trimmed;
                     }
+                    withAnimation(.snappy) { searchSuggestions.removeAll(); }
                     dismissSearch();
                 }
                 .navigationDestination(item: $navigateToTagName) { tag in
@@ -198,8 +207,11 @@ struct TagView: View {
         }
     }
 
-    func handleSuggestionTap(_ tag: String) {
-        search = replaceLastSearchWord(in: search, with: tag);
+    func applyChip(_ tag: TagSuggestion) {
+        search = replaceLastSearchWord(in: search, with: tag.name) + " ";
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+            searchSuggestions.removeAll { $0 == tag };
+        }
     }
 
     func loadInitialPostsIfNeeded() async {
