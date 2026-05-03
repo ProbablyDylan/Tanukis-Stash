@@ -18,10 +18,11 @@ struct ChipBar: View {
                         Text(tag.name)
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(tagCategoryColor(tag.category))
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(tagCategoryColor(tag.category)).interactive(), in: .capsule)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .scale(scale: 1.4).combined(with: .opacity)
