@@ -124,8 +124,15 @@ func tagCacheSync() async {
         os_log("TagCache.sync: pre-sync row count = %{public}d", log: .default, preCount);
 
         let db = try openTagDatabase();
-        let lines = csvString.split(separator: "\n", omittingEmptySubsequences: true).dropFirst();
+        let allLines = csvString.split(separator: "\n", omittingEmptySubsequences: true);
+        if let header = allLines.first {
+            os_log("TagCache.sync: CSV header = '%{public}s'", log: .default, String(header));
+        }
+        let lines = allLines.dropFirst();
         os_log("TagCache.sync: CSV has %{public}d lines (after dropping header)", log: .default, lines.count);
+        for (idx, sample) in lines.prefix(3).enumerated() {
+            os_log("TagCache.sync: sample line[%{public}d] = '%{public}s'", log: .default, idx, String(sample));
+        }
         var totalUpserted = 0;
         var buffer: [(Int, String, Int, Int)] = [];
         buffer.reserveCapacity(chunkSize);
