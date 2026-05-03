@@ -42,17 +42,7 @@ func openTagDatabase() throws -> DatabaseQueue {
         """);
         try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)");
         // Migration for existing databases (no-op if column already exists)
-        do {
-            try db.execute(sql: "ALTER TABLE tags ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0");
-            os_log("TagCache: ALTER added syncVersion column", log: .default);
-        } catch {
-            let msg = error.localizedDescription;
-            if msg.contains("duplicate column") {
-                os_log("TagCache: syncVersion column already present (no migration needed)", log: .default);
-            } else {
-                os_log("TagCache: ALTER failed: %{public}s", log: .default, msg);
-            }
-        }
+        try? db.execute(sql: "ALTER TABLE tags ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0");
     }
     _tagDB = db;
     return db;
@@ -67,21 +57,16 @@ func isTagCachePopulated() -> Bool {
 }
 
 func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
-    guard let db = try? openTagDatabase() else {
-        os_log("TagCache.searchLocalTags: failed to open database for prefix '%{public}s'", log: .default, prefix);
-        return [];
-    }
+    guard let db = try? openTagDatabase() else { return []; }
     let pattern = prefix.lowercased() + "%";
     do {
-        let results = try db.read { db in
+        return try db.read { db in
             try CachedTag.fetchAll(db, sql: """
                 SELECT * FROM tags WHERE name LIKE ? ORDER BY postCount DESC LIMIT ?
             """, arguments: [pattern, limit]);
         }
-        os_log("TagCache.searchLocalTags: prefix '%{public}s' returned %{public}d rows", log: .default, prefix, results.count);
-        return results;
     } catch {
-        os_log("TagCache.searchLocalTags: search error for '%{public}s': %{public}s", log: .default, prefix, error.localizedDescription);
+        os_log("Tag cache search error: %{public}s", log: .default, error.localizedDescription);
         return [];
     }
 }
@@ -106,44 +91,24 @@ func tagCacheSync() async {
         }
     }
 
-    guard let csv = csvData, let csvString = String(data: csv, encoding: .utf8) else {
+    guard let csvString = String(data: csvData ?? Data(), encoding: .utf8), !csvString.isEmpty else {
         os_log("TagCache.sync: failed to download or decompress tag export (no usable CSV)", log: .default);
         return;
     }
-
-    os_log("TagCache.sync: decompressed CSV size = %{public}d bytes", log: .default, csv.count);
 
     let syncVersion = Int(Date().timeIntervalSince1970);
     let chunkSize = 5000;
 
     do {
-        os_log("TagCache.sync: starting sync, version=%{public}d", log: .default, syncVersion);
-        let preCount: Int = (try? await openTagDatabase().read { db in
-            (try? Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags")) ?? -1
-        }) ?? -1;
-        os_log("TagCache.sync: pre-sync row count = %{public}d", log: .default, preCount);
-
         let db = try openTagDatabase();
-        let allLines = csvString.split(separator: "\n", omittingEmptySubsequences: true);
-        if let header = allLines.first {
-            os_log("TagCache.sync: CSV header = '%{public}s'", log: .default, String(header));
-        }
-        let lines = allLines.dropFirst();
-        os_log("TagCache.sync: CSV has %{public}d lines (after dropping header)", log: .default, lines.count);
-        for (idx, sample) in lines.prefix(3).enumerated() {
-            os_log("TagCache.sync: sample line[%{public}d] = '%{public}s'", log: .default, idx, String(sample));
-        }
+        let lines = csvString.split(separator: "\n", omittingEmptySubsequences: true).dropFirst();
         var totalUpserted = 0;
         var buffer: [(Int, String, Int, Int)] = [];
         buffer.reserveCapacity(chunkSize);
-        var parseSkipped = 0;
 
         for line in lines {
             let fields = line.split(separator: ",", omittingEmptySubsequences: false);
-            guard fields.count == 4 || fields.count == 5 else {
-                parseSkipped += 1;
-                continue;
-            }
+            guard fields.count == 4 || fields.count == 5 else { continue; }
             let id = Int(fields[0]) ?? 0;
             let name = String(fields[1]);
             let category = Int(fields[2]) ?? 0;
@@ -162,8 +127,6 @@ func tagCacheSync() async {
             totalUpserted += buffer.count;
         }
 
-        os_log("TagCache.sync: parsed %{public}d rows, skipped %{public}d malformed rows", log: .default, totalUpserted, parseSkipped);
-
         // Sweep deletions: any row whose syncVersion didn't get bumped to the current run is gone upstream.
         let deleted: Int = try await db.write { db in
             try db.execute(sql: "DELETE FROM tags WHERE syncVersion != ?", arguments: [syncVersion]);
@@ -172,10 +135,6 @@ func tagCacheSync() async {
 
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UDKey.tagCacheLastSync);
         os_log("TagCache.sync: completed — upserted %{public}d, deleted %{public}d", log: .default, totalUpserted, deleted);
-        let postCount: Int = (try? await db.read { db in
-            (try? Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags")) ?? -1
-        }) ?? -1;
-        os_log("TagCache.sync: post-sync row count = %{public}d", log: .default, postCount);
     } catch {
         os_log("TagCache.sync: caught error — %{public}s", log: .default, error.localizedDescription);
     }
