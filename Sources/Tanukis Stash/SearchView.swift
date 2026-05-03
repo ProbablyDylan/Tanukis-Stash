@@ -37,6 +37,7 @@ struct SearchView: View {
     
     var postGrid: some View {
         ScrollView(.vertical) {
+            // Must remain an eager child of the .searchable hierarchy — LazyVStack/LazyVGrid would suppress \.isSearching.
             SearchActiveReader(isActive: $isSearchActive)
             if(posts.count == 0) {
                 ProgressView(infoText)
@@ -104,6 +105,12 @@ struct SearchView: View {
                 debouncedTagSuggestion(query: search, task: &suggestionTask, results: $searchSuggestions);
             }
         }
+        .onChange(of: isSearchActive) { _, active in
+            if !active {
+                suggestionTask?.cancel();
+                withAnimation(.snappy) { searchSuggestions = []; }
+            }
+        }
         .onSubmit(of: .search) {
             let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines);
             if isSingleTagQuery(trimmedSearch) {
@@ -156,10 +163,6 @@ struct SearchView: View {
         await task.value;
     }
     
-    func updateSearch(_ tag: String) {
-        search = replaceLastSearchWord(in: search, with: tag);
-    }
-
     func applyChip(_ tag: TagSuggestion) {
         search = replaceLastSearchWord(in: search, with: tag.name) + " ";
     }
