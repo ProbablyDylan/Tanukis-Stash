@@ -9,12 +9,13 @@ struct ChipBar: View {
     let suggestions: [TagSuggestion];
     let onTap: (TagSuggestion) -> Void;
     @State private var displayed: [TagSuggestion] = [];
+    @State private var popping: Set<TagSuggestion> = [];
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(displayed, id: \.self) { tag in
-                    Button(action: { onTap(tag); }) {
+                    Button(action: { handleTap(tag); }) {
                         Text(tag.name)
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
@@ -25,7 +26,9 @@ struct ChipBar: View {
                     .glassEffect(.regular.tint(tagCategoryColor(tag.category)).interactive(), in: .capsule)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .scale(scale: 1.4).combined(with: .opacity)
+                        removal: popping.contains(tag)
+                            ? AnyTransition.scale(scale: 1.4).combined(with: .opacity)
+                            : AnyTransition.opacity
                     ))
                 }
             }
@@ -49,7 +52,23 @@ struct ChipBar: View {
             withAnimation(.snappy) { displayed = suggestions; }
         }
         .onChange(of: suggestions) { _, new in
-            withAnimation(.snappy) { displayed = new; }
+            if popping.isEmpty {
+                withAnimation(.snappy) { displayed = new; }
+            } else {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) { displayed = new; }
+            }
+        }
+    }
+
+    private func handleTap(_ tag: TagSuggestion) {
+        popping.insert(tag);
+        // Two-phase: let SwiftUI render once with `popping` updated so the
+        // .transition modifier captures the pop variant before the chip leaves.
+        DispatchQueue.main.async {
+            onTap(tag);
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                popping.remove(tag);
+            }
         }
     }
 }
