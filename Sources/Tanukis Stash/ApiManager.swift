@@ -278,20 +278,61 @@ func parseSearch(_ searchText: String) -> String {
     return String(searchText[index...]).trimmingCharacters(in: .whitespacesAndNewlines);
 }
 
+private let kTagPoolWidth = 200;
+private let kTagDisplayLimit = 10;
+
+@MainActor
+private struct TagSuggestionPool {
+    let prefix: String;
+    let pool: [CachedTag];
+    let isExhaustive: Bool; // true when SQLite returned fewer rows than asked for
+}
+
+@MainActor private var tagSuggestionPool: TagSuggestionPool?;
+
 @MainActor func debouncedTagSuggestion(
     query: String,
     task: inout Task<Void, Never>?,
     results: Binding<[TagSuggestion]>
 ) {
     task?.cancel();
-    let lastWord = parseSearch(query);
+    let lastWord = parseSearch(query).lowercased();
     guard lastWord.count >= 1 else {
         results.wrappedValue = [];
         return;
     }
-    let cached = searchLocalTags(lastWord);
-    results.wrappedValue = cached.map {
-        TagSuggestion(name: $0.name, category: $0.category, postCount: $0.postCount)
+
+    // Fast path: when the new query extends a previous query whose cached pool
+    // captured every match (didn't hit kTagPoolWidth), narrowing in memory is
+    // provably equivalent to re-querying. Skip SQLite entirely.
+    if let cache = tagSuggestionPool,
+       cache.isExhaustive,
+       lastWord.hasPrefix(cache.prefix) {
+        let filtered = cache.pool.filter { $0.name.hasPrefix(lastWord) };
+        let top = Array(filtered.prefix(kTagDisplayLimit));
+        results.wrappedValue = top.map {
+            TagSuggestion(name: $0.name, category: $0.category, postCount: $0.postCount)
+        };
+        return;
+    }
+
+    // Slow path: hit SQLite for a wider pool than we display, off the main
+    // thread, so future narrowing keystrokes can use the fast path.
+    task = Task {
+        let prefix = lastWord;
+        let pool = await Task.detached(priority: .userInitiated) {
+            searchLocalTags(prefix, limit: kTagPoolWidth)
+        }.value;
+        if Task.isCancelled { return; }
+        tagSuggestionPool = TagSuggestionPool(
+            prefix: prefix,
+            pool: pool,
+            isExhaustive: pool.count < kTagPoolWidth
+        );
+        let top = Array(pool.prefix(kTagDisplayLimit));
+        results.wrappedValue = top.map {
+            TagSuggestion(name: $0.name, category: $0.category, postCount: $0.postCount)
+        };
     };
 }
 
