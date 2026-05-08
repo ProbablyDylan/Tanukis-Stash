@@ -58,11 +58,17 @@ func isTagCachePopulated() -> Bool {
 
 func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
     guard let db = try? openTagDatabase() else { return []; }
-    let pattern = prefix.lowercased() + "%";
+    // `_` and `%` are valid characters in tag names but are also LIKE wildcards.
+    // Escape them (and the escape char itself) so the prefix is matched literally.
+    let escaped = prefix.lowercased()
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "_", with: "\\_")
+        .replacingOccurrences(of: "%", with: "\\%");
+    let pattern = escaped + "%";
     do {
         return try db.read { db in
             try CachedTag.fetchAll(db, sql: """
-                SELECT * FROM tags WHERE name LIKE ? ORDER BY postCount DESC LIMIT ?
+                SELECT * FROM tags WHERE name LIKE ? ESCAPE '\\' ORDER BY postCount DESC LIMIT ?
             """, arguments: [pattern, limit]);
         }
     } catch {
