@@ -7,7 +7,13 @@ import SwiftUI
 
 struct TagView: View {
     let tagName: String;
-    var searchEnabled: Bool = false;
+    var searchEnabled: Bool = true;
+
+    init(tagName: String, searchEnabled: Bool = true) {
+        self.tagName = tagName;
+        self.searchEnabled = searchEnabled;
+        _search = State(initialValue: tagName + " ");
+    }
 
     @State private var wiki: WikiPage?;
     @State private var tagDetail: TagDetail?;
