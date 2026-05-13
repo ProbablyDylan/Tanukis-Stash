@@ -28,21 +28,28 @@ struct PostGridCell: View {
             VStack {
                 Spacer()
                 HStack(spacing: 2) {
-                    Image(systemName: "arrowshape.up.fill")
-                    Text(post.score.total.formatted(.number.notation(.compactName)))
-                    Image(systemName: "heart.fill")
-                        .padding(.leading, 1)
-                    Text(post.fav_count.formatted(.number.notation(.compactName)))
-                    Image(systemName: "bubble.fill")
-                        .padding(.leading, 1)
-                    Text(post.comment_count.formatted(.number.notation(.compactName)))
+                    if post.score.total != 0 {
+                        Image(systemName: "arrowshape.up.fill")
+                        Text(post.score.total.formatted(.number.notation(.compactName)))
+                    }
+                    if post.fav_count != 0 {
+                        Image(systemName: "heart.fill")
+                            .padding(.leading, 1)
+                        Text(post.fav_count.formatted(.number.notation(.compactName)))
+                    }
+                    if post.comment_count != 0 {
+                        Image(systemName: "bubble.fill")
+                            .padding(.leading, 1)
+                        Text(post.comment_count.formatted(.number.notation(.compactName)))
+                    }
                 }
                 .font(.system(size: 10))
                 .fontWeight(.bold)
                 .foregroundColor(Color.white)
+                .shadow(color: .black, radius: 3, x: 0, y: 1)
+                .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
                 .frame(maxWidth: .infinity)
                 .padding(5.0)
-                .background(Color.gray.opacity(0.50))
             }
         }
         .cornerRadius(10)
