@@ -13,7 +13,7 @@ struct PostGridCell: View, Equatable {
             if let urlStr = post.preview.url {
                 KFImage(URL(string: urlStr))
                     .placeholder {
-                        ProgressView()
+                        DelayedSpinner()
                             .frame(minWidth: 0, maxWidth: .infinity)
                             .frame(width: 100, height: 150)
                     }
@@ -59,6 +59,24 @@ struct PostGridCell: View, Equatable {
         }
         .cornerRadius(10)
         .padding(0.1)
+    }
+}
+
+private struct DelayedSpinner: View {
+    @State private var visible: Bool = false;
+
+    var body: some View {
+        Group {
+            if visible {
+                ProgressView();
+            } else {
+                Color.clear;
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(300));
+            if !Task.isCancelled { visible = true; }
+        }
     }
 }
 
