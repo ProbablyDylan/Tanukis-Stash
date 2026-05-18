@@ -55,6 +55,7 @@ struct FavoritesView: View {
                     .postContextMenu(post: $posts[idx], onUnfavorite: {
                         withAnimation {
                             posts.removeAll { $0.id == post.id }
+                            recomputeSortedPosts();
                         }
                     })
                 }
