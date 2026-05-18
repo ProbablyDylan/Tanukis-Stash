@@ -50,6 +50,7 @@ struct PostGridCell: View, Equatable {
                 .font(.system(size: 10))
                 .fontWeight(.bold)
                 .foregroundColor(Color.white)
+                .compositingGroup()
                 .shadow(color: .black, radius: 3, x: 0, y: 1)
                 .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
                 .frame(maxWidth: .infinity)
