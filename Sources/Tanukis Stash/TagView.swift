@@ -244,7 +244,7 @@ struct TagView: View {
         allLoaded = !result.hasMore;
         withAnimation(.smooth) { posts += result.posts }
         isLoading = false;
-        prefetchThumbnails(for: posts);
+        prefetchThumbnails(for: result.posts);
     }
 
 }

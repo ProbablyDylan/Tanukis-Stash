@@ -110,7 +110,7 @@ struct FavoritesView: View {
         allLoaded = !result.hasMore;
         posts += result.posts;
         isLoading = false;
-        prefetchThumbnails(for: posts);
+        prefetchThumbnails(for: result.posts);
     }
 
 }
