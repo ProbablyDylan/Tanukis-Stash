@@ -175,7 +175,7 @@ struct PostPreviewFrame: View {
 
     var body: some View {
         NavigationLink(destination: PostView(post: post, search: search)) {
-            PostGridCell(post: post)
+            PostGridCell(post: post).equatable()
         }
         .postContextMenu(post: $post)
     }

@@ -1,8 +1,12 @@
 import SwiftUI
 import Kingfisher
 
-struct PostGridCell: View {
+struct PostGridCell: View, Equatable {
     let post: PostContent;
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.post.id == rhs.post.id;
+    }
 
     var body: some View {
         ZStack {

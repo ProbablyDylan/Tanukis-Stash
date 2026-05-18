@@ -222,6 +222,7 @@ struct PoolView: View {
 
     private func gridCell(post: PostContent, isSelected: Bool) -> some View {
         PostGridCell(post: post)
+            .equatable()
             .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: showGrid)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)

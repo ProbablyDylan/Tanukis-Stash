@@ -48,7 +48,7 @@ struct FavoritesView: View {
             PaginatedPostGrid(posts: sortedPosts, allLoaded: allLoaded, loadMore: loadMorePosts) { _, post in
                 if let idx = posts.firstIndex(where: { $0.id == post.id }) {
                     NavigationLink(destination: PostView(post: post, search: searchTag)) {
-                        PostGridCell(post: post)
+                        PostGridCell(post: post).equatable()
                     }
                     .postContextMenu(post: $posts[idx], onUnfavorite: {
                         withAnimation {
