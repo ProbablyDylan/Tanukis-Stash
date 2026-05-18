@@ -108,8 +108,8 @@ struct PoolView: View {
     private var carouselView: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
-                ForEach(Array(posts.enumerated()), id: \.offset) { index, post in
-                    poolPostPage(post: post, index: index)
+                ForEach(posts.indices, id: \.self) { index in
+                    poolPostPage(post: posts[index], index: index)
                         .id(index)
                         .containerRelativeFrame(.horizontal)
                 }
@@ -188,13 +188,13 @@ struct PoolView: View {
                         .padding(10)
                 }
                 LazyVGrid(columns: postGridColumns) {
-                    ForEach(Array(posts.enumerated()), id: \.offset) { index, post in
+                    ForEach(posts.indices, id: \.self) { index in
                         Button {
                             currentIndex = index;
                             scrolledIndex = index;
                             withAnimation(.easeInOut(duration: 0.25)) { showGrid = false }
                         } label: {
-                            gridCell(post: post, isSelected: index == currentIndex)
+                            gridCell(post: posts[index], isSelected: index == currentIndex)
                         }
                         .postContextMenu(post: $posts[index])
                         .id(index)
