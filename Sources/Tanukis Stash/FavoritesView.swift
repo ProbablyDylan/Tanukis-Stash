@@ -14,6 +14,7 @@ enum FavoriteSortOption: String, CaseIterable {
 
 struct FavoritesView: View {
     @State private var posts = [PostContent]();
+    @State private var sortedPosts = [PostContent]();
     @State private var page = 1;
     @State private var isLoading: Bool = false;
     @State private var allLoaded: Bool = false;
@@ -26,16 +27,17 @@ struct FavoritesView: View {
     }
 
     var limit = 75;
-    private var sortedPosts: [PostContent] {
+
+    private func recomputeSortedPosts() {
         switch sortOption {
         case .newest:
-            return posts
+            sortedPosts = posts;
         case .oldest:
-            return posts.reversed()
+            sortedPosts = posts.reversed();
         case .highestScore:
-            return posts.sorted { $0.score.total > $1.score.total }
+            sortedPosts = posts.sorted { $0.score.total > $1.score.total };
         case .mostFaved:
-            return posts.sorted { $0.fav_count > $1.fav_count }
+            sortedPosts = posts.sorted { $0.fav_count > $1.fav_count };
         }
     }
 
@@ -64,6 +66,8 @@ struct FavoritesView: View {
                 await loadPosts()
             }
         }
+        .onChange(of: posts) { recomputeSortedPosts(); }
+        .onChange(of: sortOption) { recomputeSortedPosts(); }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("Favorites")
         .toolbar {
