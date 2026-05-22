@@ -1,7 +1,9 @@
 import Foundation
+import LinkPresentation
 import Photos
 import os.log
 import SwiftUI
+import UIKit
 
 private enum DownloadError: Error {
     case albumCreationFailed
@@ -184,19 +186,67 @@ func prepareAndShareContent(
     preparingShare: Binding<Bool>,
     shareItems: Binding<[Any]>,
     showShareSheet: Binding<Bool>,
-    displayToastType: Binding<MediaActionState>
+    displayToastType: Binding<MediaActionState>,
+    includeLink: Bool = false
 ) {
     preparingShare.wrappedValue = true;
     Task {
         do {
             let tempURL = try await downloadToTemp(post: post);
-            shareItems.wrappedValue = [tempURL];
+            if includeLink {
+                let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+                if let postURL = URL(string: "https://\(domain)/posts/\(post.id)") {
+                    let item = PostRichLinkShareItem(postURL: postURL, fileURL: tempURL, postId: post.id);
+                    shareItems.wrappedValue = [item];
+                } else {
+                    shareItems.wrappedValue = [tempURL];
+                }
+            } else {
+                shareItems.wrappedValue = [tempURL];
+            }
             showShareSheet.wrappedValue = true;
             preparingShare.wrappedValue = false;
         } catch {
             os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))");
             preparingShare.wrappedValue = false; displayToastType.wrappedValue = .errorSaveFailed;
         }
+    }
+}
+
+final class PostRichLinkShareItem: NSObject, UIActivityItemSource {
+    let postURL: URL;
+    let fileURL: URL;
+    let postId: Int;
+
+    init(postURL: URL, fileURL: URL, postId: Int) {
+        self.postURL = postURL;
+        self.fileURL = fileURL;
+        self.postId = postId;
+        super.init();
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        return postURL;
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        return postURL;
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+        return "Post #\(postId)";
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata();
+        metadata.originalURL = postURL;
+        metadata.url = postURL;
+        metadata.title = "Post #\(postId)";
+        if let image = UIImage(contentsOfFile: fileURL.path) {
+            metadata.imageProvider = NSItemProvider(object: image);
+            metadata.iconProvider = NSItemProvider(object: image);
+        }
+        return metadata;
     }
 }
 

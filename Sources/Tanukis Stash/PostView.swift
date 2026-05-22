@@ -126,11 +126,10 @@ struct PostView: View {
                         } label: {
                             Label("Save to Photos", systemImage: "square.and.arrow.down")
                         }
-                        if let shareURL = URL(string: "https://\(UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net")/posts/\(post.id)") {
-                            ShareLink(
-                                item: shareURL,
-                                label: { Label("Share Link", systemImage: "link") }
-                            )
+                        Button {
+                            prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType, includeLink: true)
+                        } label: {
+                            Label("Share Link", systemImage: "link")
                         }
                         Button {
                             prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType)
