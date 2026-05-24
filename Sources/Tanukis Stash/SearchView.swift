@@ -17,6 +17,7 @@ struct SearchView: View {
     @State var showSettings = false;
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @Environment(\.dismissSearch) private var dismissSearch;
+    @Environment(\.isPadRegular) private var isPadRegular;
     @State private var activeSearch: String;
 
     @State private var navigateToTagName: String?;
@@ -61,9 +62,15 @@ struct SearchView: View {
     var body: some View {
         postGrid
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isSearchActive && !searchSuggestions.isEmpty {
+            if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -172,10 +179,20 @@ struct SearchView: View {
 struct PostPreviewFrame: View {
     @Binding var post: PostContent;
     let search: String;
+    @Environment(\.selectPost) private var selectPost;
 
     var body: some View {
-        NavigationLink(destination: PostView(post: post, search: search)) {
-            PostGridCell(post: post).equatable()
+        Group {
+            if let selectPost {
+                Button { selectPost(post); } label: {
+                    PostGridCell(post: post).equatable()
+                }
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink(destination: PostView(post: post, search: search)) {
+                    PostGridCell(post: post).equatable()
+                }
+            }
         }
         .postContextMenu(post: $post)
     }

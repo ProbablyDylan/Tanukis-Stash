@@ -7,6 +7,8 @@ struct PaginatedPostGrid<CellContent: View>: View {
     let cell: (Int, PostContent) -> CellContent;
 
     @State private var loadingMore: Bool = false;
+    @State private var gridWidth: CGFloat = 0;
+    @Environment(\.isPadRegular) private var isPadRegular;
 
     private static var endMessages: [String] {
         [
@@ -32,7 +34,7 @@ struct PaginatedPostGrid<CellContent: View>: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: postGridColumns) {
+        LazyVGrid(columns: postGridColumns(forWidth: gridWidth, isPadRegular: isPadRegular)) {
             ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
                 cell(i, post)
                     .transition(.opacity)
@@ -48,6 +50,7 @@ struct PaginatedPostGrid<CellContent: View>: View {
             }
         }
         .padding(10)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0; }
 
         if posts.count > 0 {
             if loadingMore {

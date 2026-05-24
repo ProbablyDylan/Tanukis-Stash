@@ -37,6 +37,7 @@ struct TagView: View {
     @State private var navigateToSearch: String?;
     @State private var scrolledPostID: Int?;
     @Environment(\.dismissSearch) private var dismissSearch;
+    @Environment(\.isPadRegular) private var isPadRegular;
 
     var limit = 75;
     private var displayName: String {
@@ -47,65 +48,69 @@ struct TagView: View {
         ScrollView(.vertical) {
             // Must remain an eager child of the .searchable hierarchy — LazyVStack/LazyVGrid would suppress \.isSearching.
             SearchActiveReader(isActive: $isSearchActive)
-            if let wiki = wiki, !wiki.body.isEmpty {
-                DisclosureGroup(isExpanded: $wikiExpanded.animation(.smooth)) {
-                    DTextView(text: wiki.body)
+            VStack(spacing: 0) {
+                if let wiki = wiki, !wiki.body.isEmpty {
+                    DisclosureGroup(isExpanded: $wikiExpanded.animation(.smooth)) {
+                        DTextView(text: wiki.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Text("Wiki")
+                            .font(.title3)
+                            .fontWeight(.heavy)
+                            .foregroundColor(Color.primary)
+                    }
+                    .padding(10)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if !aliases.isEmpty {
+                    DisclosureGroup(isExpanded: $aliasesExpanded.animation(.smooth)) {
+                        VStack(alignment: .leading) {
+                            ForEach(aliases, id: \.id) { alias in
+                                NavigationLink(destination: TagView(tagName: alias.antecedent_name)) {
+                                    Text(alias.antecedent_name.replacingOccurrences(of: "_", with: " "))
+                                        .font(.body)
+                                        .foregroundColor(tagCategoryColor(tagCategories[alias.antecedent_name] ?? 0))
+                                        .multilineTextAlignment(.leading)
+                                }
+                            }
+                        }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Text("Wiki")
-                        .font(.title3)
-                        .fontWeight(.heavy)
-                        .foregroundColor(Color.primary)
+                    } label: {
+                        Text("Aliases")
+                            .font(.title3)
+                            .fontWeight(.heavy)
+                            .foregroundColor(Color.primary)
+                    }
+                    .padding(10)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
 
-            if !aliases.isEmpty {
-                DisclosureGroup(isExpanded: $aliasesExpanded.animation(.smooth)) {
-                    VStack(alignment: .leading) {
-                        ForEach(aliases, id: \.id) { alias in
-                            NavigationLink(destination: TagView(tagName: alias.antecedent_name)) {
-                                Text(alias.antecedent_name.replacingOccurrences(of: "_", with: " "))
-                                    .font(.body)
-                                    .foregroundColor(tagCategoryColor(tagCategories[alias.antecedent_name] ?? 0))
-                                    .multilineTextAlignment(.leading)
+                if !relatedTags.isEmpty {
+                    DisclosureGroup(isExpanded: $relatedTagsExpanded.animation(.smooth)) {
+                        VStack(alignment: .leading) {
+                            ForEach(relatedTags, id: \.self) { tag in
+                                NavigationLink(destination: TagView(tagName: tag)) {
+                                    Text(tag.replacingOccurrences(of: "_", with: " "))
+                                        .font(.body)
+                                        .foregroundColor(tagCategoryColor(tagCategories[tag] ?? 0))
+                                        .multilineTextAlignment(.leading)
+                                }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Text("Related Tags")
+                            .font(.title3)
+                            .fontWeight(.heavy)
+                            .foregroundColor(Color.primary)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Text("Aliases")
-                        .font(.title3)
-                        .fontWeight(.heavy)
-                        .foregroundColor(Color.primary)
+                    .padding(10)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            if !relatedTags.isEmpty {
-                DisclosureGroup(isExpanded: $relatedTagsExpanded.animation(.smooth)) {
-                    VStack(alignment: .leading) {
-                        ForEach(relatedTags, id: \.self) { tag in
-                            NavigationLink(destination: TagView(tagName: tag)) {
-                                Text(tag.replacingOccurrences(of: "_", with: " "))
-                                    .font(.body)
-                                    .foregroundColor(tagCategoryColor(tagCategories[tag] ?? 0))
-                                    .multilineTextAlignment(.leading)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Text("Related Tags")
-                        .font(.title3)
-                        .fontWeight(.heavy)
-                        .foregroundColor(Color.primary)
-                }
-                .padding(10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+            .frame(maxWidth: isPadRegular ? 760 : .infinity)
+            .frame(maxWidth: .infinity)
 
             if !initialLoadComplete {
                 ProgressView()
@@ -177,9 +182,15 @@ struct TagView: View {
         if searchEnabled {
             tagContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if isSearchActive && !searchSuggestions.isEmpty {
+                    if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
                         ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .searchable(text: $search, prompt: "Search for tags")

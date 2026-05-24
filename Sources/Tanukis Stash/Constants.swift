@@ -64,8 +64,13 @@ enum ImageCacheExpiration: Int, CaseIterable, Identifiable {
     }
 }
 
-let postGridColumns = [
-    GridItem(.flexible(minimum: 75)),
-    GridItem(.flexible()),
-    GridItem(.flexible())
-];
+// Width-bucketed columns. iPhone keeps a 3-col floor (target 200 over ~390pt
+// would otherwise drop to 2). iPad regular drops the floor to 2 so the narrow
+// master column shows 2 large previews instead of 3 squeezed ones; the wider
+// detail column still scales up via the width/target math.
+func postGridColumns(forWidth width: CGFloat, isPadRegular: Bool) -> [GridItem] {
+    let target: CGFloat = 200;
+    let floorCount = isPadRegular ? 2 : 3;
+    let count = max(floorCount, Int(width / target));
+    return Array(repeating: GridItem(.flexible()), count: count);
+}

@@ -3,12 +3,22 @@ import Kingfisher
 
 struct PostGridCell: View, Equatable {
     let post: PostContent;
+    @Environment(\.isPadRegular) private var isPadRegular;
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.post.id == rhs.post.id;
     }
 
+    @ViewBuilder
     var body: some View {
+        if isPadRegular {
+            iPadBody
+        } else {
+            iPhoneBody
+        }
+    }
+
+    private var iPhoneBody: some View {
         ZStack {
             if let urlStr = post.preview.url {
                 KFImage(URL(string: urlStr))
@@ -29,36 +39,61 @@ struct PostGridCell: View, Equatable {
                     .frame(height: 150)
                     .background(Color.gray.opacity(0.90))
             }
-            VStack {
-                Spacer()
-                HStack(spacing: 2) {
-                    if post.score.total != 0 {
-                        Image(systemName: "arrowshape.up.fill")
-                        Text(post.score.total.formatted(.number.notation(.compactName)))
-                    }
-                    if post.fav_count != 0 {
-                        Image(systemName: "heart.fill")
-                            .padding(.leading, 1)
-                        Text(post.fav_count.formatted(.number.notation(.compactName)))
-                    }
-                    if post.comment_count != 0 {
-                        Image(systemName: "bubble.fill")
-                            .padding(.leading, 1)
-                        Text(post.comment_count.formatted(.number.notation(.compactName)))
-                    }
-                }
-                .font(.system(size: 10))
-                .fontWeight(.bold)
-                .foregroundColor(Color.white)
-                .compositingGroup()
-                .shadow(color: .black, radius: 3, x: 0, y: 1)
-                .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
-                .frame(maxWidth: .infinity)
-                .padding(5.0)
-            }
+            statsOverlay
         }
         .cornerRadius(10)
         .padding(0.1)
+    }
+
+    private var iPadBody: some View {
+        Color.clear
+            .aspectRatio(0.8, contentMode: .fit)
+            .overlay {
+                if let urlStr = post.preview.url {
+                    KFImage(URL(string: urlStr))
+                        .placeholder { DelayedSpinner() }
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.gray.opacity(0.90)
+                        .overlay(Text("Deleted").foregroundColor(.white))
+                }
+            }
+            .clipped()
+            .overlay { statsOverlay }
+            .shadow(color: Color.primary.opacity(0.3), radius: 1)
+            .cornerRadius(10)
+            .padding(0.1)
+    }
+
+    private var statsOverlay: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 2) {
+                if post.score.total != 0 {
+                    Image(systemName: "arrowshape.up.fill")
+                    Text(post.score.total.formatted(.number.notation(.compactName)))
+                }
+                if post.fav_count != 0 {
+                    Image(systemName: "heart.fill")
+                        .padding(.leading, 1)
+                    Text(post.fav_count.formatted(.number.notation(.compactName)))
+                }
+                if post.comment_count != 0 {
+                    Image(systemName: "bubble.fill")
+                        .padding(.leading, 1)
+                    Text(post.comment_count.formatted(.number.notation(.compactName)))
+                }
+            }
+            .font(.system(size: 10))
+            .fontWeight(.bold)
+            .foregroundColor(Color.white)
+            .compositingGroup()
+            .shadow(color: .black, radius: 3, x: 0, y: 1)
+            .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
+            .frame(maxWidth: .infinity)
+            .padding(5.0)
+        }
     }
 }
 

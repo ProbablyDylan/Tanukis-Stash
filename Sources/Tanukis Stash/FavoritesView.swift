@@ -49,15 +49,16 @@ struct FavoritesView: View {
             }
             PaginatedPostGrid(posts: sortedPosts, allLoaded: allLoaded, loadMore: loadMorePosts) { _, post in
                 if let idx = posts.firstIndex(where: { $0.id == post.id }) {
-                    NavigationLink(destination: PostView(post: post, search: searchTag)) {
-                        PostGridCell(post: post).equatable()
-                    }
-                    .postContextMenu(post: $posts[idx], onUnfavorite: {
-                        withAnimation {
-                            posts.removeAll { $0.id == post.id }
-                            recomputeSortedPosts();
+                    FavoriteGridCell(
+                        post: $posts[idx],
+                        search: searchTag,
+                        onUnfavorite: {
+                            withAnimation {
+                                posts.removeAll { $0.id == post.id }
+                                recomputeSortedPosts();
+                            }
                         }
-                    })
+                    )
                 }
             }
         }
@@ -118,4 +119,27 @@ struct FavoritesView: View {
         prefetchThumbnails(for: result.posts);
     }
 
+}
+
+struct FavoriteGridCell: View {
+    @Binding var post: PostContent;
+    let search: String;
+    let onUnfavorite: () -> Void;
+    @Environment(\.selectPost) private var selectPost;
+
+    var body: some View {
+        Group {
+            if let selectPost {
+                Button { selectPost(post); } label: {
+                    PostGridCell(post: post).equatable()
+                }
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink(destination: PostView(post: post, search: search)) {
+                    PostGridCell(post: post).equatable()
+                }
+            }
+        }
+        .postContextMenu(post: $post, onUnfavorite: onUnfavorite)
+    }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct PostMetadataBar: View {
     let post: PostContent;
     @Binding var selectedArtist: String?;
+    @Environment(\.navigateToTag) private var navigateToTag;
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -38,29 +39,42 @@ struct PostMetadataBar: View {
     @ViewBuilder
     private var artistSection: some View {
         if post.tags.artist.count == 1 {
-            NavigationLink(destination: TagView(tagName: post.tags.artist[0])) {
-                HStack(spacing: 4) {
-                    Image(systemName: "paintpalette.fill")
-                    Text(post.tags.artist[0])
+            let artist = post.tags.artist[0];
+            if let navigateToTag {
+                Button {
+                    navigateToTag(artist);
+                } label: {
+                    artistLabel(text: artist)
                 }
-                .font(.footnote)
-                .foregroundStyle(.orange)
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink(destination: TagView(tagName: artist)) {
+                    artistLabel(text: artist)
+                }
             }
         } else if post.tags.artist.count > 1 {
             Menu {
                 ForEach(post.tags.artist, id: \.self) { artist in
                     Button(artist) {
-                        selectedArtist = artist;
+                        if let navigateToTag {
+                            navigateToTag(artist);
+                        } else {
+                            selectedArtist = artist;
+                        }
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "paintpalette.fill")
-                    Text(post.tags.artist.joined(separator: ", "))
-                }
-                .font(.footnote)
-                .foregroundStyle(.orange)
+                artistLabel(text: post.tags.artist.joined(separator: ", "))
             }
         }
+    }
+
+    private func artistLabel(text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "paintpalette.fill")
+            Text(text)
+        }
+        .font(.footnote)
+        .foregroundStyle(.orange)
     }
 }

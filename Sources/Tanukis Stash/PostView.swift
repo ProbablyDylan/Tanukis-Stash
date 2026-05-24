@@ -27,6 +27,7 @@ struct PostView: View {
     @State private var showShareSheet = false;
     @State private var preparingShare = false;
     @State private var selectedArtist: String?;
+    @Environment(\.isPadRegular) private var isPadRegular;
 
     private var tapGesture: some Gesture {
         !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
@@ -69,6 +70,8 @@ struct PostView: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxWidth: isPadRegular ? 760 : .infinity)
+                .frame(maxWidth: .infinity)
             }
             .navigationBarTitle("Post", displayMode: .inline)
             .sheet(isPresented: $showImageViewer) {
@@ -365,15 +368,33 @@ struct InfoView: View {
     let search: String;
     @State private var selectedTag: String?;
     @State private var selectedSearch: String?;
+    @Environment(\.navigateToTag) private var navigateToTag;
+    @Environment(\.navigateToSearch) private var navigateToSearch;
+
+    private func handleViewTag(_ tag: String) {
+        if let navigateToTag {
+            navigateToTag(tag);
+        } else {
+            selectedTag = tag;
+        }
+    }
+
+    private func handleSearchTag(_ query: String) {
+        if let navigateToSearch {
+            navigateToSearch(query);
+        } else {
+            selectedSearch = query;
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading) {
-            TagGroup(label: "Character", tags: post.tags.character, search: search, textColor: Color.green, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.green, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
-            TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray, onViewTag: { selectedTag = $0 }, onSearchTag: { selectedSearch = $0 })
+            TagGroup(label: "Character", tags: post.tags.character, search: search, textColor: Color.green, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
+            TagGroup(label: "Copyright", tags: post.tags.copyright, search: search, textColor: Color.purple, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
+            TagGroup(label: "Species", tags: post.tags.species, search: search, textColor: Color.red, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
+            TagGroup(label: "General", tags: post.tags.general, search: search, textColor: Color.blue, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
+            TagGroup(label: "Lore", tags: post.tags.lore, search: search, textColor: Color.green, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
+            TagGroup(label: "Meta", tags: post.tags.meta, search: search, textColor: Color.gray, onViewTag: handleViewTag, onSearchTag: handleSearchTag)
             if (!post.sources.isEmpty) {
                 DisclosureGroup {
                     VStack(alignment: .leading) {

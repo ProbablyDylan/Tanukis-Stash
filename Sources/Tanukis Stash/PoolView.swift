@@ -38,9 +38,11 @@ struct PoolView: View {
     @State private var shareItems: [Any] = []
     @State private var preparingShare = false
     @State private var selectedArtist: String?
+    @State private var gridWidth: CGFloat = 0
 
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false
     @Namespace private var gridTransition
+    @Environment(\.isPadRegular) private var isPadRegular
 
     private let limit = 75
     private var poolTag: String { "pool:\(poolId) order:id" }
@@ -174,6 +176,8 @@ struct PoolView: View {
 
                     Spacer().frame(height: 60)
                 }
+                .frame(maxWidth: isPadRegular ? 900 : .infinity)
+                .frame(maxWidth: .infinity)
             }
     }
 
@@ -187,7 +191,7 @@ struct PoolView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
-                LazyVGrid(columns: postGridColumns) {
+                LazyVGrid(columns: postGridColumns(forWidth: gridWidth, isPadRegular: isPadRegular)) {
                     ForEach(posts.indices, id: \.self) { index in
                         Button {
                             currentIndex = index;
@@ -201,6 +205,7 @@ struct PoolView: View {
                     }
                 }
                 .padding(10)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0; }
             }
             .refreshable {
                 page = 1
