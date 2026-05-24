@@ -92,7 +92,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var rootView: some View {
-        if hSizeClass == .regular {
+        if hSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad {
             iPadRoot
                 .environment(\.isPadRegular, true)
         } else {
