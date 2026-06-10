@@ -48,7 +48,7 @@ struct PostMetadataBar: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(destination: TagView(tagName: artist)) {
+                NavigationLink(value: TagDestination(name: artist)) {
                     artistLabel(text: artist)
                 }
             }

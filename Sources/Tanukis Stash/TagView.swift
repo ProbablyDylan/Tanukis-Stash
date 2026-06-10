@@ -67,7 +67,7 @@ struct TagView: View {
                     DisclosureGroup(isExpanded: $aliasesExpanded.animation(.smooth)) {
                         VStack(alignment: .leading) {
                             ForEach(aliases, id: \.id) { alias in
-                                NavigationLink(destination: TagView(tagName: alias.antecedent_name)) {
+                                NavigationLink(value: TagDestination(name: alias.antecedent_name)) {
                                     Text(alias.antecedent_name.replacingOccurrences(of: "_", with: " "))
                                         .font(.body)
                                         .foregroundColor(tagCategoryColor(tagCategories[alias.antecedent_name] ?? 0))
@@ -90,7 +90,7 @@ struct TagView: View {
                     DisclosureGroup(isExpanded: $relatedTagsExpanded.animation(.smooth)) {
                         VStack(alignment: .leading) {
                             ForEach(relatedTags, id: \.self) { tag in
-                                NavigationLink(destination: TagView(tagName: tag)) {
+                                NavigationLink(value: TagDestination(name: tag)) {
                                     Text(tag.replacingOccurrences(of: "_", with: " "))
                                         .font(.body)
                                         .foregroundColor(tagCategoryColor(tagCategories[tag] ?? 0))

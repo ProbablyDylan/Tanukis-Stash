@@ -88,7 +88,7 @@ struct SearchView: View {
             }
             if (AUTHENTICATED) {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(destination: FavoritesView()) {
+                    NavigationLink(value: FavoritesDestination()) {
                         Label("Favorites", systemImage: "heart")
                     }
                 }

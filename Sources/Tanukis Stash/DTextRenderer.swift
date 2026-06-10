@@ -362,7 +362,7 @@ struct DTextThumbEmbed: View {
     var body: some View {
         Group {
             if let post = post {
-                NavigationLink(destination: PostView(post: post, search: "")) {
+                NavigationLink(value: PostDestination(post: post, search: "")) {
                     KFImage(URL(string: post.preview.url ?? ""))
                         .resizable()
                         .aspectRatio(contentMode: .fill)
