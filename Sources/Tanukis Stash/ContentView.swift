@@ -7,16 +7,6 @@
 
 import SwiftUI
 
-// Hashable wrappers so we can push String-valued destinations onto a typed
-// NavigationPath without colliding with each other.
-struct TagDestination: Hashable {
-    let name: String;
-}
-
-struct SearchDestination: Hashable {
-    let query: String;
-}
-
 // Routes a tapped post to the detail column (sets ContentView.selectedPost).
 typealias SelectPostAction = @MainActor @Sendable (PostContent) -> Void;
 
@@ -98,6 +88,7 @@ struct ContentView: View {
         } else {
             NavigationStack {
                 SearchView(search: "")
+                    .appNavigationDestinations()
             }
         }
     }
@@ -106,25 +97,23 @@ struct ContentView: View {
         NavigationSplitView {
             NavigationStack(path: $masterPath) {
                 SearchView(search: "")
-                    .navigationDestination(for: TagDestination.self) { tagDest in
-                        TagView(tagName: tagDest.name)
-                    }
-                    .navigationDestination(for: SearchDestination.self) { searchDest in
-                        SearchView(search: searchDest.query)
-                    }
+                    .appNavigationDestinations()
             }
         } detail: {
             NavigationStack {
-                if let post = selectedPost {
-                    PostView(post: post, search: "")
-                        .id(post.id)
-                } else {
-                    ContentUnavailableView(
-                        "Select a post",
-                        systemImage: "photo.on.rectangle.angled",
-                        description: Text("Tap any post on the left to view it here.")
-                    )
+                Group {
+                    if let post = selectedPost {
+                        PostView(post: post, search: "")
+                            .id(post.id)
+                    } else {
+                        ContentUnavailableView(
+                            "Select a post",
+                            systemImage: "photo.on.rectangle.angled",
+                            description: Text("Tap any post on the left to view it here.")
+                        )
+                    }
                 }
+                .appNavigationDestinations()
             }
         }
         .environment(\.selectPost) { post in
