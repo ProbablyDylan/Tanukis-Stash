@@ -21,7 +21,11 @@ struct PostView: View {
     @State private var favorited: Bool = false;
     @State private var our_score: Int = 2;
     @State private var score_valid: Bool = false;
-    @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
+    // Not @AppStorage: on iOS 27 (beta 1), @AppStorage inside a view that grid cells
+    // eagerly create as a NavigationLink destination re-dirties the view graph every
+    // update pass, hanging the main thread at 100% CPU on push. Plain @State seeded
+    // from UserDefaults (refreshed in onAppear) avoids the loop.
+    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
     @State private var descExpanded: Bool = true;
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
@@ -155,6 +159,7 @@ struct PostView: View {
             .postToast(displayToastType: $displayToastType)
             .onAppear {
                 favorited = post.is_favorited;
+                AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
             }
             .task {
                 await fetchCurrentPostLiked();
