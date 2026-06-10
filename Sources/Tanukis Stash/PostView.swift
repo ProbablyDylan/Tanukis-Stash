@@ -219,17 +219,17 @@ struct RelatedPostsView: View {
 
                         if let children = activeChildren {
                             ForEach(children.prefix(maxVisibleChildren), id: \.id) { child in
-                                NavigationLink(destination: PostView(post: child, search: search)) {
+                                NavigationLink(value: PostDestination(post: child, search: search)) {
                                     RelatedPostCardContent(post: child, label: "Child")
                                 }
                             }
                             if children.count > maxVisibleChildren {
-                                NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
+                                NavigationLink(value: SearchDestination(query: "parent:\(post.id)")) {
                                     overflowCard(count: children.count)
                                 }
                             }
                         } else if !post.relationships.children.isEmpty || post.relationships.has_active_children {
-                            NavigationLink(destination: SearchView(search: "parent:\(post.id)")) {
+                            NavigationLink(value: SearchDestination(query: "parent:\(post.id)")) {
                                 overflowCard(count: post.relationships.children.isEmpty ? nil : post.relationships.children.count)
                             }
                         }
@@ -304,7 +304,7 @@ struct RelatedPostCard: View {
     var body: some View {
         Group {
             if let post = fetchedPost {
-                NavigationLink(destination: PostView(post: post, search: search)) {
+                NavigationLink(value: PostDestination(post: post, search: search)) {
                     RelatedPostCardContent(post: post, label: label)
                 }
             } else {
@@ -329,7 +329,7 @@ struct PoolCard: View {
     }
 
     var body: some View {
-        NavigationLink(destination: PoolView(poolId: poolId, pool: pool)) {
+        NavigationLink(value: PoolDestination(poolId: poolId, pool: pool)) {
             Group {
                 if let post = firstPost {
                     KFImage(URL(string: post.preview.url ?? ""))
