@@ -135,7 +135,7 @@ struct FavoriteGridCell: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(destination: PostView(post: post, search: search)) {
+                NavigationLink(value: PostDestination(post: post, search: search)) {
                     PostGridCell(post: post).equatable()
                 }
             }
