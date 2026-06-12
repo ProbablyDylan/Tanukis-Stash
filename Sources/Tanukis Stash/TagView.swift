@@ -193,6 +193,8 @@ struct TagView: View {
                     }
                 }
                 .searchable(text: $search, prompt: "Search for tags")
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 .onChange(of: search) {
                     debouncedTagSuggestion(query: search, task: &suggestionTask, results: $searchSuggestions);
                 }

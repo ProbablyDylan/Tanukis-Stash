@@ -76,6 +76,8 @@ struct SearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(activeSearch.isEmpty ? "Recent" : "Results")
         .searchable(text: $search, prompt: "Search for tags")
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
