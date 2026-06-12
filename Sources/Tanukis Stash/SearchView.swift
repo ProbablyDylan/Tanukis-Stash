@@ -138,19 +138,21 @@ struct SearchView: View {
             isLoading = true;
             defer { isLoading = false; }
             infoText = loadingText;
+            // Commit page/allLoaded only after the cancellation guard — a cancelled
+            // append that already bumped `page` silently skips a page of results.
             let newPosts: [PostContent];
             if append {
-                page += 1;
-                let result = await fetchRecentPosts(page, limit, activeSearch);
+                let nextPage = page + 1;
+                let result = await fetchRecentPosts(nextPage, limit, activeSearch);
                 guard !Task.isCancelled else { return; }
+                page = nextPage;
                 allLoaded = !result.hasMore;
                 newPosts = result.posts;
                 posts += newPosts;
             } else {
-                page = 1;
-                allLoaded = false;
-                let result = await fetchRecentPosts(page, limit, activeSearch);
+                let result = await fetchRecentPosts(1, limit, activeSearch);
                 guard !Task.isCancelled else { return; }
+                page = 1;
                 allLoaded = !result.hasMore;
                 newPosts = result.posts;
                 posts = newPosts;
