@@ -33,11 +33,10 @@ struct TagView: View {
     @State private var searchSuggestions = [TagSuggestion]();
     @State private var suggestionTask: Task<Void, Never>?;
     @State private var isSearchActive: Bool = false;
-    @State private var navigateToTagName: String?;
-    @State private var navigateToSearch: String?;
     @State private var scrolledPostID: Int?;
     @Environment(\.dismissSearch) private var dismissSearch;
     @Environment(\.isPadRegular) private var isPadRegular;
+    @Environment(\.pushDestination) private var pushDestination;
 
     var limit = 75;
     private var displayName: String {
@@ -206,18 +205,12 @@ struct TagView: View {
                 .onSubmit(of: .search) {
                     let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines);
                     if isSingleTagQuery(trimmed) {
-                        navigateToTagName = trimmed;
+                        pushDestination?(TagDestination(name: trimmed));
                     } else {
-                        navigateToSearch = trimmed;
+                        pushDestination?(SearchDestination(query: trimmed));
                     }
                     withAnimation(.snappy) { searchSuggestions.removeAll(); }
                     dismissSearch();
-                }
-                .navigationDestination(item: $navigateToTagName) { tag in
-                    TagView(tagName: tag, searchEnabled: true)
-                }
-                .navigationDestination(item: $navigateToSearch) { query in
-                    SearchView(search: query)
                 }
         } else {
             tagContent

@@ -17,6 +17,12 @@ typealias NavigateToTagAction = @MainActor @Sendable (String) -> Void;
 // Routes "Add to Current Search" style multi-term queries to master.
 typealias NavigateToSearchAction = @MainActor @Sendable (String) -> Void;
 
+// Pushes a value-typed destination onto the enclosing column's NavigationStack.
+// All programmatic pushes must go through this — mixing navigationDestination(item:)
+// with value-based links in the same stack corrupts it (duplicate/recreated
+// destinations, multi-level pops).
+typealias PushDestinationAction = @MainActor @Sendable (any Hashable) -> Void;
+
 private struct SelectPostKey: EnvironmentKey {
     static let defaultValue: SelectPostAction? = nil;
 }
@@ -27,6 +33,10 @@ private struct NavigateToTagKey: EnvironmentKey {
 
 private struct NavigateToSearchKey: EnvironmentKey {
     static let defaultValue: NavigateToSearchAction? = nil;
+}
+
+private struct PushDestinationKey: EnvironmentKey {
+    static let defaultValue: PushDestinationAction? = nil;
 }
 
 // App-level signal that the split layout is active. True only inside
@@ -52,6 +62,11 @@ extension EnvironmentValues {
         set { self[NavigateToSearchKey.self] = newValue }
     }
 
+    var pushDestination: PushDestinationAction? {
+        get { self[PushDestinationKey.self] }
+        set { self[PushDestinationKey.self] = newValue }
+    }
+
     var isPadRegular: Bool {
         get { self[IsPadRegularKey.self] }
         set { self[IsPadRegularKey.self] = newValue }
@@ -62,6 +77,8 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass;
     @State private var selectedPost: PostContent? = nil;
     @State private var masterPath = NavigationPath();
+    @State private var detailPath = NavigationPath();
+    @State private var phonePath = NavigationPath();
     @State private var didLogin = false;
 
     var body: some View {
@@ -86,10 +103,11 @@ struct ContentView: View {
             iPadRoot
                 .environment(\.isPadRegular, true)
         } else {
-            NavigationStack {
+            NavigationStack(path: $phonePath) {
                 SearchView(search: "")
                     .appNavigationDestinations()
             }
+            .environment(\.pushDestination) { phonePath.append($0) }
         }
     }
 
@@ -99,8 +117,9 @@ struct ContentView: View {
                 SearchView(search: "")
                     .appNavigationDestinations()
             }
+            .environment(\.pushDestination) { masterPath.append($0) }
         } detail: {
-            NavigationStack {
+            NavigationStack(path: $detailPath) {
                 Group {
                     if let post = selectedPost {
                         PostView(post: post, search: "")
@@ -115,9 +134,11 @@ struct ContentView: View {
                 }
                 .appNavigationDestinations()
             }
+            .environment(\.pushDestination) { detailPath.append($0) }
         }
         .environment(\.selectPost) { post in
             selectedPost = post;
+            detailPath = NavigationPath();
         }
         .environment(\.navigateToTag) { name in
             masterPath.append(TagDestination(name: name));

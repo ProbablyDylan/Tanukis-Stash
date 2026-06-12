@@ -2,8 +2,8 @@ import SwiftUI
 
 struct PostMetadataBar: View {
     let post: PostContent;
-    @Binding var selectedArtist: String?;
     @Environment(\.navigateToTag) private var navigateToTag;
+    @Environment(\.pushDestination) private var pushDestination;
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -59,7 +59,7 @@ struct PostMetadataBar: View {
                         if let navigateToTag {
                             navigateToTag(artist);
                         } else {
-                            selectedArtist = artist;
+                            pushDestination?(TagDestination(name: artist));
                         }
                     }
                 }

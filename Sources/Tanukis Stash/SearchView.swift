@@ -18,9 +18,9 @@ struct SearchView: View {
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @Environment(\.dismissSearch) private var dismissSearch;
     @Environment(\.isPadRegular) private var isPadRegular;
+    @Environment(\.pushDestination) private var pushDestination;
     @State private var activeSearch: String;
 
-    @State private var navigateToTagName: String?;
     @State var infoText: String = ""
     @State private var scrolledPostID: Int?;
     @State private var isLoading: Bool = false;
@@ -76,9 +76,6 @@ struct SearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(activeSearch.isEmpty ? "Recent" : "Results")
         .searchable(text: $search, prompt: "Search for tags")
-        .navigationDestination(item: $navigateToTagName) { tagName in
-            TagView(tagName: tagName, searchEnabled: true)
-        }
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -120,7 +117,7 @@ struct SearchView: View {
         .onSubmit(of: .search) {
             let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines);
             if isSingleTagQuery(trimmedSearch) {
-                navigateToTagName = trimmedSearch;
+                pushDestination?(TagDestination(name: trimmedSearch));
                 dismissSearch();
             } else {
                 activeSearch = search;

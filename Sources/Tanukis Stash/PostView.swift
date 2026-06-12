@@ -30,7 +30,6 @@ struct PostView: View {
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
     @State private var preparingShare = false;
-    @State private var selectedArtist: String?;
     @Environment(\.isPadRegular) private var isPadRegular;
 
     private var tapGesture: some Gesture {
@@ -48,7 +47,7 @@ struct PostView: View {
                         )
                 }
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
-                    PostMetadataBar(post: post, selectedArtist: $selectedArtist)
+                    PostMetadataBar(post: post)
                     RelatedPostsView(post: post, search: search)
                         .padding(10)
                     if !post.description.isEmpty {
@@ -164,9 +163,6 @@ struct PostView: View {
             .task {
                 await fetchCurrentPostLiked();
                 await fetchCurrentPostVote();
-            }
-            .navigationDestination(item: $selectedArtist) { artist in
-                TagView(tagName: artist)
             }
     }
 
@@ -371,16 +367,15 @@ struct PoolCard: View {
 struct InfoView: View {
     let post: PostContent;
     let search: String;
-    @State private var selectedTag: String?;
-    @State private var selectedSearch: String?;
     @Environment(\.navigateToTag) private var navigateToTag;
     @Environment(\.navigateToSearch) private var navigateToSearch;
+    @Environment(\.pushDestination) private var pushDestination;
 
     private func handleViewTag(_ tag: String) {
         if let navigateToTag {
             navigateToTag(tag);
         } else {
-            selectedTag = tag;
+            pushDestination?(TagDestination(name: tag));
         }
     }
 
@@ -388,7 +383,7 @@ struct InfoView: View {
         if let navigateToSearch {
             navigateToSearch(query);
         } else {
-            selectedSearch = query;
+            pushDestination?(SearchDestination(query: query));
         }
     }
 
@@ -420,12 +415,6 @@ struct InfoView: View {
                 }
             }
             Spacer()
-        }
-        .navigationDestination(item: $selectedTag) { tag in
-            TagView(tagName: tag)
-        }
-        .navigationDestination(item: $selectedSearch) { query in
-            SearchView(search: query)
         }
     }
 }

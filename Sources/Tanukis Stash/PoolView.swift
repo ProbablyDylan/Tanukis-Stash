@@ -37,7 +37,6 @@ struct PoolView: View {
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
     @State private var preparingShare = false
-    @State private var selectedArtist: String?
     @State private var gridWidth: CGFloat = 0
 
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false
@@ -100,9 +99,6 @@ struct PoolView: View {
             ActivityView(activityItems: shareItems)
         }
         .postToast(displayToastType: $displayToastType)
-        .navigationDestination(item: $selectedArtist) { artist in
-            TagView(tagName: artist)
-        }
     }
 
     // MARK: - Carousel
@@ -145,7 +141,7 @@ struct PoolView: View {
                 }
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
 
-                    PostMetadataBar(post: post, selectedArtist: $selectedArtist)
+                    PostMetadataBar(post: post)
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
 
