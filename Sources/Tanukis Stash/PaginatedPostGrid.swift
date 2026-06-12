@@ -78,6 +78,24 @@ extension PaginatedPostGrid where CellContent == PostPreviewFrame {
         self.posts = posts.wrappedValue;
         self.allLoaded = allLoaded;
         self.loadMore = loadMore;
-        self.cell = { i, _ in PostPreviewFrame(post: posts[i], search: search) };
+        // Anchor the cell binding to the post id, not the index — the array can
+        // shrink (refresh, cleared search) while stale cells are still live.
+        self.cell = { i, post in
+            PostPreviewFrame(post: Binding(
+                get: {
+                    if posts.wrappedValue.indices.contains(i), posts.wrappedValue[i].id == post.id {
+                        return posts.wrappedValue[i];
+                    }
+                    return posts.wrappedValue.first(where: { $0.id == post.id }) ?? post;
+                },
+                set: { newValue in
+                    if posts.wrappedValue.indices.contains(i), posts.wrappedValue[i].id == post.id {
+                        posts.wrappedValue[i] = newValue;
+                    } else if let idx = posts.wrappedValue.firstIndex(where: { $0.id == post.id }) {
+                        posts.wrappedValue[idx] = newValue;
+                    }
+                }
+            ), search: search);
+        };
     }
 }
