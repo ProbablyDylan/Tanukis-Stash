@@ -167,8 +167,7 @@ struct PostView: View {
                 AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
             }
             .task {
-                await fetchCurrentPostLiked();
-                await fetchCurrentPostVote();
+                await fetchCurrentPostState();
             }
     }
 
@@ -176,18 +175,12 @@ struct PostView: View {
         return CGFloat(CGFloat(post.file.height) * (CGFloat(geometry.size.width) / CGFloat(post.file.width)))
     }
 
-    func fetchCurrentPostLiked() async {
-        do {
-            guard let data = await makeRequest(destination: "/posts/\(post.id).json", method: "GET", body: nil, contentType: "application/json") else { return; }
-            let parsedData = try JSONDecoder().decode(Post.self, from: data);
-            favorited = parsedData.post.is_favorited;
-        } catch {
-            os_log("Error fetching post liked state: %{public}s", log: .default, error.localizedDescription);
-        }
-    }
-
-    func fetchCurrentPostVote() async {
-        our_score = await getVote(postId: post.id);
+    // The post handed to this view may have been fetched a while ago, so the
+    // favorite and vote state are refreshed from a single request.
+    func fetchCurrentPostState() async {
+        guard let current = await getPost(postId: post.id) else { return; }
+        favorited = current.is_favorited;
+        our_score = current.vote;
         score_valid = true;
     }
 

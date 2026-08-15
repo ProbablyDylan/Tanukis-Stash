@@ -83,9 +83,7 @@ struct PoolView: View {
         .onChange(of: currentIndex) { _, newIndex in
             guard posts.indices.contains(newIndex) else { return }
             favorited = posts[newIndex].is_favorited;
-            our_score = 2;
-            score_valid = false;
-            Task { await fetchCurrentPostVote(); }
+            applyCurrentPostVote();
         }
         .navigationTitle(poolDisplayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -292,7 +290,7 @@ struct PoolView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
                         guard let post = currentPost else { return }
-                        Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
+                        Task { await applyVote(post: post, value: 1) }
                     } label: {
                         Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                             .imageScale(.large)
@@ -302,7 +300,7 @@ struct PoolView: View {
                     .disabled(!score_valid)
                     Button {
                         guard let post = currentPost else { return }
-                        Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
+                        Task { await applyVote(post: post, value: -1) }
                     } label: {
                         Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                             .imageScale(.large)
@@ -395,12 +393,23 @@ struct PoolView: View {
         if posts.indices.contains(currentIndex) {
             favorited = posts[currentIndex].is_favorited;
         }
-        await fetchCurrentPostVote();
+        applyCurrentPostVote();
     }
 
-    private func fetchCurrentPostVote() async {
+    // Written back into the listing so swiping away and returning doesn't
+    // resurrect the vote the post was loaded with.
+    private func applyVote(post: PostContent, value: Int) async {
+        let score = await votePost(postId: post.id, value: value, no_unvote: false);
+        our_score = score;
+        if let index = posts.firstIndex(where: { $0.id == post.id }) {
+            posts[index].vote = score;
+        }
+    }
+
+    // The pool listing already carries the authenticated user's vote.
+    private func applyCurrentPostVote() {
         guard let post = currentPost else { return; }
-        our_score = await getVote(postId: post.id);
+        our_score = post.vote;
         score_valid = true;
     }
 
