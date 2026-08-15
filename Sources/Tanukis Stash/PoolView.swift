@@ -334,14 +334,20 @@ struct PoolView: View {
                         Label("Share Content", systemImage: "photo")
                     }
                 } label: {
-                    if displayToastType == .inProgress || preparingShare {
-                        ProgressView()
-                    } else {
-                        Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
-                            .imageScale(.large)
-                            .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
-                            .contentTransition(.symbolEffect(.replace))
+                    Group {
+                        if displayToastType == .inProgress || preparingShare {
+                            ProgressView()
+                                .transition(.scale.combined(with: .opacity))
+                        } else {
+                            Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
+                                .imageScale(.large)
+                                .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
+                                .contentTransition(.symbolEffect(.replace))
+                                .transition(.scale.combined(with: .opacity))
+                        }
                     }
+                    .animation(.smooth, value: displayToastType)
+                    .animation(.smooth, value: preparingShare)
                 }
                 .disabled(displayToastType == .inProgress || preparingShare)
             }
