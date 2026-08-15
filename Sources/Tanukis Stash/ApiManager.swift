@@ -40,11 +40,7 @@ func login() async -> Bool {
 }
 
 func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool {
-    let tagSet = Set(
-        (post.tags.general + post.tags.species + post.tags.character +
-         post.tags.copyright + post.tags.artist + post.tags.invalid +
-         post.tags.lore + post.tags.meta).map { $0.lowercased() }
-    );
+    let tagSet = Set(post.tags.all.map { $0.lowercased() });
 
     for rawLine in blacklistedArray {
         // Strip inline comments (space then #)
@@ -138,11 +134,7 @@ private func blacklistTokenMatchesPost(_ token: String, post: PostContent, tagSe
         case "favcount":
             return blacklistCompareValue(post.fav_count, against: value);
         case "tagcount":
-            let total = post.tags.general.count + post.tags.species.count +
-                post.tags.character.count + post.tags.copyright.count +
-                post.tags.artist.count + post.tags.invalid.count +
-                post.tags.lore.count + post.tags.meta.count;
-            return blacklistCompareValue(total, against: value);
+            return blacklistCompareValue(tagSet.count, against: value);
         case "status":
             switch value {
             case "pending": return post.flags.pending;
@@ -336,9 +328,12 @@ private struct TagSuggestionPool {
     };
 }
 
+// Post endpoints are requested in the v2 response format; `extended` keeps tags
+// grouped by category, which the tag lists and the artist bar rely on.
+let postApiFormat = "v2=true&mode=extended";
+
 func getPost(postId: Int) async -> PostContent? {
-    let post: Post? = await fetchJSON("/posts/\(postId).json", logLabel: "post \(postId)");
-    return post?.post;
+    return await fetchJSON("/posts/\(postId).json?\(postApiFormat)", logLabel: "post \(postId)");
 }
 
 func fetchPool(poolId: Int) async -> PoolContent? {
@@ -364,9 +359,9 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> (posts
         let url: String;
 
         if (tags == "fav:\(username)") {
-            url = "/favorites.json?limit=\(limit)&page=\(page)"
+            url = "/favorites.json?limit=\(limit)&page=\(page)&\(postApiFormat)"
         } else {
-            url = "/posts.json?tags=\(encoded ?? "")&limit=\(limit)&page=\(page)"
+            url = "/posts.json?tags=\(encoded ?? "")&limit=\(limit)&page=\(page)&\(postApiFormat)"
         }
 
         let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
@@ -376,10 +371,10 @@ func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> (posts
             return ([], false);
         }
 
-        let parsedData: Posts = try JSONDecoder().decode(Posts.self, from: data!)
-        let hasMore = parsedData.posts.count >= limit;
+        let parsedData = try JSONDecoder().decode([PostContent].self, from: data!)
+        let hasMore = parsedData.count >= limit;
 
-        var filteredPosts = parsedData.posts.filter { $0.preview.url != nil };
+        var filteredPosts = parsedData.filter { $0.preview.url != nil };
 
         // If the blacklist is enabled, filter out blacklisted posts
         if (UserDefaults.standard.bool(forKey: UDKey.enableBlacklist)) {
@@ -410,29 +405,6 @@ func unFavoritePost(postId: Int) async -> Bool {
     return true;
 }
 
-
-func getVote(postId: Int) async -> Int {
-    let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-    let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
-    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
-    guard let url = URL(string: "https://\(domain)/posts/\(postId)") else { return 0; }
-    var request = URLRequest(url: url);
-    request.addValue(userAgent, forHTTPHeaderField: "User-Agent");
-    if !API_KEY.isEmpty && !username.isEmpty {
-        let AUTH_STRING = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";
-        request.addValue("Basic \(AUTH_STRING)", forHTTPHeaderField: "Authorization");
-    }
-    do {
-        let (data, _) = try await URLSession.shared.data(for: request);
-        let html = String(data: data, encoding: .utf8) ?? "";
-        if html.contains("post-vote-up-\(postId) score-positive") { return 1; }
-        if html.contains("post-vote-down-\(postId) score-negative") { return -1; }
-        return 0;
-    } catch {
-        os_log("getVote failed: %{public}s", log: .default, error.localizedDescription);
-        return 0;
-    }
-}
 
 func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
     let url = "/posts/\(postId)/votes.json"
