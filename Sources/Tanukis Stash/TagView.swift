@@ -135,6 +135,9 @@ struct TagView: View {
             }
         }
         .scrollPosition(id: $scrolledPostID)
+        // Picks up vote/favorite totals cast in PostView, which can't write
+        // back into this array directly — see PostStatsSync.swift.
+        .onAppear { applyPendingPostStatsUpdates(to: &posts); }
         .task {
             async let metadata: Void = loadMetadata();
             async let postsLoad: Void = loadInitialPostsIfNeeded();

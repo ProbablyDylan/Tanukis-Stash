@@ -470,30 +470,18 @@ func unFavoritePost(postId: Int) async -> Bool {
 }
 
 
-struct VoteResult {
-    let ourScore: Int;
-    // Present when the server echoed fresh totals; nil means the caller
-    // should fall back to Score.applyingVoteDelta.
-    let score: Score?;
-}
-
-// Returns the user's resulting vote and (when available) the fresh post
-// score, or nil when the request failed so callers can leave their displayed
-// vote and score untouched.
-func votePost(postId: Int, value: Int, no_unvote: Bool) async -> VoteResult? {
+// Returns the user's resulting vote (-1, 0, 1), or nil when the request
+// failed so callers can leave their displayed vote untouched. The endpoint
+// doesn't reliably echo the post's new total score, so callers that need the
+// fresh total re-fetch the post via getPost rather than guess a delta.
+func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int? {
     let url = "/posts/\(postId)/votes.json"
     guard let data = await makeRequest(destination: url, method: "POST", body: "score=\(value)&no_unvote=\(no_unvote)".data(using: .utf8), contentType: "application/x-www-form-urlencoded") else {
         return nil;
     }
     do {
         let json = try JSONDecoder().decode(VoteResponse.self, from: data);
-        let ourScore = json.our_score ?? 0;
-        let score: Score? = if let total = json.score, let up = json.up, let down = json.down {
-            Score(up: up, down: down, total: total);
-        } else {
-            nil;
-        }
-        return VoteResult(ourScore: ourScore, score: score);
+        return json.our_score ?? 0;
     } catch {
         os_log("Error decoding vote response: %{public}@", log: .default, String(describing: error));
         return nil;

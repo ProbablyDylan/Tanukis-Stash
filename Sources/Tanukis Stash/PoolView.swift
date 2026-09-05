@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Kingfisher
+import os.log
 
 @MainActor
 struct PoolView: View {
@@ -73,6 +74,10 @@ struct PoolView: View {
                 }
             }
         }
+        // Picks up vote/favorite totals cast in a pushed PostView (e.g. a
+        // related/child post), which can't write back here directly — see
+        // PostStatsSync.swift.
+        .onAppear { applyPendingPostStatsUpdates(to: &posts); }
         .task {
             if pool == nil { pool = await fetchPool(poolId: poolId) }
             if posts.indices.contains(currentIndex) {
@@ -281,11 +286,19 @@ struct PoolView: View {
                             let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
-                            if success {
-                                posts[index].fav_count += wasFavorited ? -1 : 1;
-                            } else {
+                            guard success else {
                                 favorited = wasFavorited;
                                 posts[index].is_favorited = wasFavorited;
+                                return;
+                            }
+                            // The favorite endpoints don't echo a new fav_count;
+                            // pull the real one instead of guessing ±1.
+                            guard let current = await getPost(postId: post.id) else {
+                                os_log("PoolView favorite: getPost returned nil for post %{public}d", log: .default, post.id);
+                                return;
+                            }
+                            if posts.indices.contains(index), posts[index].id == post.id {
+                                posts[index].fav_count = current.fav_count;
                             }
                         }
                     } label: {
@@ -400,12 +413,18 @@ struct PoolView: View {
     // Written back into the listing so swiping away and returning doesn't
     // resurrect the vote the post was loaded with.
     private func applyVote(post: PostContent, value: Int) async {
-        let previousVote = our_score;
-        guard let result = await votePost(postId: post.id, value: value, no_unvote: false) else { return; }
-        our_score = result.ourScore;
-        if let index = posts.firstIndex(where: { $0.id == post.id }) {
-            posts[index].vote = result.ourScore;
-            posts[index].score = result.score ?? posts[index].score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+        guard let ourScore = await votePost(postId: post.id, value: value, no_unvote: false) else { return; }
+        our_score = ourScore;
+        guard let index = posts.firstIndex(where: { $0.id == post.id }) else { return; }
+        posts[index].vote = ourScore;
+        // The vote endpoint doesn't reliably echo the post's new total score,
+        // so ask the server for the real number instead of guessing a delta.
+        guard let current = await getPost(postId: post.id) else {
+            os_log("PoolView.applyVote: getPost returned nil for post %{public}d", log: .default, post.id);
+            return;
+        }
+        if posts.indices.contains(index), posts[index].id == post.id {
+            posts[index].score = current.score;
         }
     }
 

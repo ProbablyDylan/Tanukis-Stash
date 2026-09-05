@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct PostContextMenu: ViewModifier {
 
@@ -21,8 +22,8 @@ struct PostContextMenu: ViewModifier {
                             let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
-                            if !success { post.is_favorited = wasFavorited; return; }
-                            post.fav_count += wasFavorited ? -1 : 1;
+                            guard success else { post.is_favorited = wasFavorited; return; }
+                            await refreshStats();
                             if wasFavorited { onUnfavorite?(); }
                         }
                     } label: {
@@ -36,10 +37,9 @@ struct PostContextMenu: ViewModifier {
                     // PostView opens with the vote the user just cast.
                     Button {
                         Task {
-                            let previousVote = post.vote;
-                            guard let result = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
-                            post.vote = result.ourScore;
-                            post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                            guard let ourScore = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                            post.vote = ourScore;
+                            await refreshStats();
                         }
                     } label: {
                         Label(
@@ -49,10 +49,9 @@ struct PostContextMenu: ViewModifier {
                     }
                     Button {
                         Task {
-                            let previousVote = post.vote;
-                            guard let result = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
-                            post.vote = result.ourScore;
-                            post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                            guard let ourScore = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                            post.vote = ourScore;
+                            await refreshStats();
                         }
                     } label: {
                         Label(
@@ -84,6 +83,17 @@ struct PostContextMenu: ViewModifier {
                 ActivityView(activityItems: shareItems)
             }
             .postToast(displayToastType: $displayToastType)
+    }
+
+    // The vote/favorite endpoints don't reliably echo the post's new totals,
+    // so after a successful action ask the server for the real numbers.
+    private func refreshStats() async {
+        guard let current = await getPost(postId: post.id) else {
+            os_log("PostContextMenu.refreshStats: getPost returned nil for post %{public}d", log: .default, post.id);
+            return;
+        }
+        post.score = current.score;
+        post.fav_count = current.fav_count;
     }
 }
 

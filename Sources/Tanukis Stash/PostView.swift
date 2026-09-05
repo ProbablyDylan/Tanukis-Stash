@@ -26,6 +26,14 @@ struct PostView: View {
         self.highlightCommentId = highlightCommentId;
     }
 
+    // Overlays any stats a vote/favorite already recorded for this post. This
+    // matters beyond the current @State: if this PostView was itself reached
+    // from another PostView (e.g. a related/child post), its own copy has no
+    // path back to that other view's array — see PostStatsSync.swift.
+    private var displayPost: PostContent {
+        pendingPostStatsUpdate(for: post.id) ?? post;
+    }
+
     @State private var displayToastType: MediaActionState = .idle;
     @State private var favorited: Bool = false;
     @State private var our_score: Int = 2;
@@ -56,7 +64,7 @@ struct PostView: View {
                         )
                 }
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
-                    PostMetadataBar(post: post)
+                    PostMetadataBar(post: displayPost)
                     RelatedPostsView(post: post, search: search)
                         .padding(10)
                     if !post.description.isEmpty {
@@ -102,12 +110,10 @@ struct PostView: View {
                                 let success = wasFavorited
                                     ? await unFavoritePost(postId: post.id)
                                     : await favoritePost(postId: post.id);
-                                if success {
-                                    post.is_favorited = !wasFavorited;
-                                    post.fav_count += wasFavorited ? -1 : 1;
-                                } else {
-                                    favorited = wasFavorited;
-                                }
+                                guard success else { favorited = wasFavorited; return; }
+                                post.is_favorited = !wasFavorited;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
                             }
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
@@ -120,11 +126,11 @@ struct PostView: View {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Button {
                             Task {
-                                let previousVote = our_score;
-                                guard let result = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
-                                our_score = result.ourScore;
-                                post.vote = result.ourScore;
-                                post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                                guard let ourScore = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                                our_score = ourScore;
+                                post.vote = ourScore;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
                             }
                         } label: {
                             Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
@@ -135,11 +141,11 @@ struct PostView: View {
                         .disabled(!score_valid)
                         Button {
                             Task {
-                                let previousVote = our_score;
-                                guard let result = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
-                                our_score = result.ourScore;
-                                post.vote = result.ourScore;
-                                post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                                guard let ourScore = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                                our_score = ourScore;
+                                post.vote = ourScore;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
                             }
                         } label: {
                             Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
@@ -196,6 +202,18 @@ struct PostView: View {
         favorited = current.is_favorited;
         our_score = current.vote;
         score_valid = true;
+    }
+
+    // The vote/favorite endpoints don't reliably echo the post's new totals,
+    // so after a successful action we ask the server for the real numbers
+    // instead of guessing a delta client-side.
+    func refreshPostStats() async {
+        guard let current = await getPost(postId: post.id) else {
+            os_log("refreshPostStats: getPost returned nil for post %{public}d", log: .default, post.id);
+            return;
+        }
+        post.score = current.score;
+        post.fav_count = current.fav_count;
     }
 
 }

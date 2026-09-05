@@ -6,15 +6,14 @@ import SwiftUI
 // `PostWire` structs below and mapped onto the flatter model the views use.
 // See https://e621.net/forum_topics/63849
 
+// Equatable/Hashable are auto-synthesized from every stored property below —
+// do NOT add a custom id-only `==`/`hash(into:)`. @State (and @State arrays)
+// skip publishing a change when the new value is `==` the old one; an
+// id-only `==` makes a vote or favorite that only changes score/fav_count
+// look like "no change" and the view silently never redraws. ForEach/lookup
+// code that wants identity-only comparison already uses an explicit `.id`
+// predicate or `id:` keypath — nothing relies on `==` being id-only.
 struct PostContent: Decodable, Hashable {
-    static func == (lhs: PostContent, rhs: PostContent) -> Bool {
-        return lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id);
-    }
-    
     let id: Int;
     let created_at: String;
     let updated_at: String?;
@@ -235,13 +234,6 @@ struct Score: Decodable, Hashable {
     let up: Int;
     let down: Int;
     let total: Int;
-
-    // Fallback for when the vote endpoint doesn't echo fresh up/down/total —
-    // approximates the new total from the vote transition without touching
-    // up/down (neither is displayed on its own, so staleness there is fine).
-    func applyingVoteDelta(from oldVote: Int, to newVote: Int) -> Score {
-        Score(up: up, down: down, total: total + (newVote - oldVote));
-    }
 }
 
 // The server builds these keys from its own category table, so the categories
