@@ -5,8 +5,15 @@ struct PostGridCell: View, Equatable {
     let post: PostContent;
     @Environment(\.isPadRegular) private var isPadRegular;
 
+    // PostContent's own == compares id only (needed for ForEach/Set identity),
+    // so comparing lhs.post == rhs.post here would tell .equatable() nothing
+    // changed even when a vote or favorite bumped the displayed stats. Compare
+    // every field this cell actually renders instead.
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.post.id == rhs.post.id;
+        lhs.post.id == rhs.post.id &&
+        lhs.post.score.total == rhs.post.score.total &&
+        lhs.post.fav_count == rhs.post.fav_count &&
+        lhs.post.comment_count == rhs.post.comment_count;
     }
 
     @ViewBuilder

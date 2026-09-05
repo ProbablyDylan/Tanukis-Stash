@@ -273,16 +273,19 @@ struct PoolView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
                         guard let post = currentPost else { return }
+                        let index = currentIndex;
                         let wasFavorited = favorited;
                         favorited = !wasFavorited;
-                        posts[currentIndex].is_favorited = !wasFavorited;
+                        posts[index].is_favorited = !wasFavorited;
                         Task {
                             let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
-                            if !success {
+                            if success {
+                                posts[index].fav_count += wasFavorited ? -1 : 1;
+                            } else {
                                 favorited = wasFavorited;
-                                posts[currentIndex].is_favorited = wasFavorited;
+                                posts[index].is_favorited = wasFavorited;
                             }
                         }
                     } label: {
@@ -397,10 +400,12 @@ struct PoolView: View {
     // Written back into the listing so swiping away and returning doesn't
     // resurrect the vote the post was loaded with.
     private func applyVote(post: PostContent, value: Int) async {
-        guard let score = await votePost(postId: post.id, value: value, no_unvote: false) else { return; }
-        our_score = score;
+        let previousVote = our_score;
+        guard let result = await votePost(postId: post.id, value: value, no_unvote: false) else { return; }
+        our_score = result.ourScore;
         if let index = posts.firstIndex(where: { $0.id == post.id }) {
-            posts[index].vote = score;
+            posts[index].vote = result.ourScore;
+            posts[index].score = result.score ?? posts[index].score.applyingVoteDelta(from: previousVote, to: result.ourScore);
         }
     }
 

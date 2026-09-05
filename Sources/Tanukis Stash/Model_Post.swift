@@ -21,13 +21,13 @@ struct PostContent: Decodable, Hashable {
     let file: File;
     let preview: Preview;
     let sample: Sample;
-    let score: Score;
+    var score: Score;
     let tags: Tags;
     let locked_tags: [String];
     let change_seq: Int;
     let flags: Flags;
     let rating: String;
-    let fav_count: Int;
+    var fav_count: Int;
     let sources: [String];
     let pools: [Int];
     let relationships: Relationships;
@@ -235,6 +235,13 @@ struct Score: Decodable, Hashable {
     let up: Int;
     let down: Int;
     let total: Int;
+
+    // Fallback for when the vote endpoint doesn't echo fresh up/down/total —
+    // approximates the new total from the vote transition without touching
+    // up/down (neither is displayed on its own, so staleness there is fine).
+    func applyingVoteDelta(from oldVote: Int, to newVote: Int) -> Score {
+        Score(up: up, down: down, total: total + (newVote - oldVote));
+    }
 }
 
 // The server builds these keys from its own category table, so the categories

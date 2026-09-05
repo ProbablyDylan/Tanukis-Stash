@@ -12,10 +12,19 @@ import os.log
 @MainActor
 struct PostView: View {
     @State private var showImageViewer: Bool = false;
-    let post: PostContent;
+    // @State (not `let`) so a vote or favorite writes straight back into the
+    // score/fav_count PostMetadataBar reads, instead of only the local
+    // favorited/our_score toggles used for the toolbar icons.
+    @State private var post: PostContent;
     let search: String;
     var highlightCommentId: Int? = nil;
     @State var url: String = "";
+
+    init(post: PostContent, search: String, highlightCommentId: Int? = nil) {
+        _post = State(initialValue: post);
+        self.search = search;
+        self.highlightCommentId = highlightCommentId;
+    }
 
     @State private var displayToastType: MediaActionState = .idle;
     @State private var favorited: Bool = false;
@@ -93,7 +102,12 @@ struct PostView: View {
                                 let success = wasFavorited
                                     ? await unFavoritePost(postId: post.id)
                                     : await favoritePost(postId: post.id);
-                                if !success { favorited = wasFavorited; }
+                                if success {
+                                    post.is_favorited = !wasFavorited;
+                                    post.fav_count += wasFavorited ? -1 : 1;
+                                } else {
+                                    favorited = wasFavorited;
+                                }
                             }
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
@@ -105,7 +119,13 @@ struct PostView: View {
                     ToolbarSpacer(.fixed, placement: .bottomBar)
                     ToolbarItemGroup(placement: .bottomBar) {
                         Button {
-                            Task { if let vote = await votePost(postId: post.id, value: 1, no_unvote: false) { our_score = vote; } }
+                            Task {
+                                let previousVote = our_score;
+                                guard let result = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                                our_score = result.ourScore;
+                                post.vote = result.ourScore;
+                                post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                            }
                         } label: {
                             Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                                 .imageScale(.large)
@@ -114,7 +134,13 @@ struct PostView: View {
                         }
                         .disabled(!score_valid)
                         Button {
-                            Task { if let vote = await votePost(postId: post.id, value: -1, no_unvote: false) { our_score = vote; } }
+                            Task {
+                                let previousVote = our_score;
+                                guard let result = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                                our_score = result.ourScore;
+                                post.vote = result.ourScore;
+                                post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                            }
                         } label: {
                             Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                                 .imageScale(.large)
@@ -166,6 +192,7 @@ struct PostView: View {
     // favorite and vote state are refreshed from a single request.
     func fetchCurrentPostState() async {
         guard let current = await getPost(postId: post.id) else { return; }
+        post = current;
         favorited = current.is_favorited;
         our_score = current.vote;
         score_valid = true;

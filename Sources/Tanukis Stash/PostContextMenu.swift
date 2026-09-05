@@ -22,6 +22,7 @@ struct PostContextMenu: ViewModifier {
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
                             if !success { post.is_favorited = wasFavorited; return; }
+                            post.fav_count += wasFavorited ? -1 : 1;
                             if wasFavorited { onUnfavorite?(); }
                         }
                     } label: {
@@ -34,7 +35,12 @@ struct PostContextMenu: ViewModifier {
                     // label says which it will do. The result is written back so
                     // PostView opens with the vote the user just cast.
                     Button {
-                        Task { if let vote = await votePost(postId: post.id, value: 1, no_unvote: false) { post.vote = vote; } }
+                        Task {
+                            let previousVote = post.vote;
+                            guard let result = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                            post.vote = result.ourScore;
+                            post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                        }
                     } label: {
                         Label(
                             post.vote == 1 ? "Remove Upvote" : "Upvote",
@@ -42,7 +48,12 @@ struct PostContextMenu: ViewModifier {
                         )
                     }
                     Button {
-                        Task { if let vote = await votePost(postId: post.id, value: -1, no_unvote: false) { post.vote = vote; } }
+                        Task {
+                            let previousVote = post.vote;
+                            guard let result = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                            post.vote = result.ourScore;
+                            post.score = result.score ?? post.score.applyingVoteDelta(from: previousVote, to: result.ourScore);
+                        }
                     } label: {
                         Label(
                             post.vote == -1 ? "Remove Downvote" : "Downvote",
