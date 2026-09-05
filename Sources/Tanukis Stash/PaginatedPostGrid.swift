@@ -63,7 +63,55 @@ struct PaginatedPostGrid<CellContent: View>: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
+            } else {
+                // Normally auto-load fires before this is reached. It's the
+                // manual fallback when a page fetch failed and the user is
+                // already parked at the bottom with nothing left to scroll.
+                Button("Load More") {
+                    loadingMore = true;
+                    Task {
+                        await loadMore();
+                        loadingMore = false;
+                    }
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 20)
             }
+        }
+    }
+}
+
+// Shown when the fetch succeeded but the blacklist emptied every page in the
+// skip budget: the grid has no cells to trigger load-more, so offer it here.
+struct BlacklistSkippedView: View {
+    let loadMore: () async -> Void;
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Nothing to Show Yet", systemImage: "eye.slash")
+        } description: {
+            Text("Every post on the pages loaded so far is blacklisted.")
+        } actions: {
+            Button("Load More") { Task { await loadMore(); } }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+// Full-screen state for a first-page fetch that failed outright, as opposed
+// to an empty result.
+struct PostLoadFailedView: View {
+    let retry: () async -> Void;
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Couldn't Load Posts", systemImage: "wifi.exclamationmark")
+        } description: {
+            Text("Check your connection and try again.")
+        } actions: {
+            Button("Retry") { Task { await retry(); } }
+                .buttonStyle(.borderedProminent)
         }
     }
 }

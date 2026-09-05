@@ -74,6 +74,9 @@ struct VideoView: View {
     @State private var status: Status = .loading;
     @State private var statusCancellable: AnyCancellable?;
     @State private var loopCancellable: AnyCancellable?;
+    // Set when scrolling away paused playback, so scrolling back resumes it
+    // without touching a video the user paused themselves.
+    @State private var pausedByScroll = false;
 
     enum Status { case loading, ready, failed, noVariant }
 
@@ -99,7 +102,16 @@ struct VideoView: View {
         .onAppear { setupIfNeeded(); }
         .onDisappear { player?.pause(); }
         .onScrollVisibilityChange(threshold: 0.4) { visible in
-            if !visible { player?.pause(); }
+            guard let player else { return; }
+            if !visible {
+                if player.rate > 0 {
+                    pausedByScroll = true;
+                    player.pause();
+                }
+            } else if pausedByScroll {
+                pausedByScroll = false;
+                player.play();
+            }
         }
     }
 

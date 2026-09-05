@@ -23,9 +23,9 @@ struct PoolView: View {
     @State private var currentIndex = 0
     @State private var scrolledIndex: Int?
     @State private var showGrid = false
-    @State private var page = 1
     @State private var isLoading = false
     @State private var allLoaded = false
+    @State private var loadFailed = false
     @State private var infoText = "Loading pool..."
 
     // Current post interaction state
@@ -202,11 +202,8 @@ struct PoolView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0; }
             }
             .refreshable {
-                page = 1
-                allLoaded = false
-                pool = await fetchPool(poolId: poolId)
-                posts = await fetchRecentPosts(page, limit, poolTag).posts
-                prefetchThumbnails(for: posts)
+                pool = await fetchPool(poolId: poolId);
+                await loadPosts();
             }
             .onAppear {
                 proxy.scrollTo(currentIndex, anchor: .center)
@@ -233,9 +230,18 @@ struct PoolView: View {
 
     private var positionIndicator: some View {
         Group {
-            if isLoading || posts.count <= 1 && !allLoaded {
+            if isLoading || posts.count <= 1 && !allLoaded && !loadFailed {
                 ProgressView()
                     .controlSize(.small)
+            } else if loadFailed {
+                Button {
+                    Task { await loadPosts(); }
+                } label: {
+                    Label("\(posts.count) / \(totalCount) · Retry", systemImage: "arrow.clockwise")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.plain)
             } else {
                 Text("\(currentIndex + 1) / \(totalCount)")
                     .font(.caption)
@@ -315,7 +321,7 @@ struct PoolView: View {
                 Menu {
                     Button {
                         guard let post = currentPost else { return }
-                        Task { displayToastType = .inProgress; saveFile(post: post, showToast: $displayToastType) }
+                        saveFile(post: post, showToast: $displayToastType);
                     } label: {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
                     }
@@ -332,20 +338,7 @@ struct PoolView: View {
                         Label("Share Content", systemImage: "photo")
                     }
                 } label: {
-                    Group {
-                        if displayToastType == .inProgress || preparingShare {
-                            ProgressView()
-                                .transition(.scale.combined(with: .opacity))
-                        } else {
-                            Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
-                                .imageScale(.large)
-                                .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
-                                .contentTransition(.symbolEffect(.replace))
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                    }
-                    .animation(.smooth, value: displayToastType)
-                    .animation(.smooth, value: preparingShare)
+                    MediaActionMenuLabel(state: displayToastType, preparingShare: preparingShare)
                 }
                 .disabled(displayToastType == .inProgress || preparingShare)
             }
@@ -356,10 +349,13 @@ struct PoolView: View {
 
     private func loadPosts() async {
         isLoading = true;
+        loadFailed = false;
         infoText = "Loading pool...";
         var allPosts: [PostContent] = [];
         var currentPage = 1;
         let maxPages = 20;
+
+        var failed = false;
 
         while currentPage <= maxPages {
             if Task.isCancelled {
@@ -367,11 +363,11 @@ struct PoolView: View {
                 return;
             }
             let result = await fetchRecentPosts(currentPage, limit, poolTag);
-            if result.posts.isEmpty { break; }
+            if result.failed { failed = true; break; }
             let existingIds = Set(allPosts.map { $0.id });
             allPosts += result.posts.filter { !existingIds.contains($0.id) };
             if !result.hasMore { break; }
-            currentPage += 1;
+            currentPage = result.page + 1;
         }
 
         if Task.isCancelled {
@@ -380,14 +376,16 @@ struct PoolView: View {
         }
 
         if allPosts.isEmpty {
-            infoText = "No posts found";
+            infoText = failed ? "Couldn't load pool" : "No posts found";
             isLoading = false;
             return;
         }
 
         scrolledIndex = currentIndex;
         posts = allPosts;
-        allLoaded = true;
+        // A page failure mid-pool keeps what loaded; the indicator offers a retry.
+        allLoaded = !failed;
+        loadFailed = failed;
         isLoading = false;
         prefetchThumbnails(for: posts);
         if posts.indices.contains(currentIndex) {
@@ -399,7 +397,7 @@ struct PoolView: View {
     // Written back into the listing so swiping away and returning doesn't
     // resurrect the vote the post was loaded with.
     private func applyVote(post: PostContent, value: Int) async {
-        let score = await votePost(postId: post.id, value: value, no_unvote: false);
+        guard let score = await votePost(postId: post.id, value: value, no_unvote: false) else { return; }
         our_score = score;
         if let index = posts.firstIndex(where: { $0.id == post.id }) {
             posts[index].vote = score;

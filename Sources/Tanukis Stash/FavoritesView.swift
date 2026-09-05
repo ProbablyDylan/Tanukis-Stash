@@ -5,58 +5,71 @@
 
 import SwiftUI
 
+// Sorting is done by the server so it covers the whole favorites list, not
+// just the pages loaded so far. "Recent" uses the favorites endpoint (favorite
+// order); the others go through posts.json with an `order:` metatag.
 enum FavoriteSortOption: String, CaseIterable {
-    case newest = "Newest"
+    case recent = "Recent"
     case oldest = "Oldest"
     case highestScore = "Score"
     case mostFaved = "Favorites"
+
+    func searchTag(username: String) -> String {
+        let base = "fav:\(username)";
+        switch self {
+        case .recent: return base;
+        case .oldest: return base + " order:id";
+        case .highestScore: return base + " order:score";
+        case .mostFaved: return base + " order:favcount";
+        }
+    }
 }
 
 struct FavoritesView: View {
     @State private var posts = [PostContent]();
-    @State private var sortedPosts = [PostContent]();
     @State private var page = 1;
     @State private var isLoading: Bool = false;
+    @State private var hasLoaded: Bool = false;
+    @State private var loadFailed: Bool = false;
     @State private var allLoaded: Bool = false;
-    @State private var infoText: String = "Loading favorites...";
-    @State private var sortOption: FavoriteSortOption = .newest;
+    @State private var sortOption: FavoriteSortOption = .recent;
     @State private var scrolledPostID: Int?;
+    // Bumped by every fresh load (refresh, sort change) so an in-flight
+    // load-more can't append its page on top of the reset list.
+    @State private var loadGeneration: Int = 0;
 
     private var searchTag: String {
-        "fav:\(UserDefaults.standard.string(forKey: UDKey.username) ?? "")"
+        sortOption.searchTag(username: UserDefaults.standard.string(forKey: UDKey.username) ?? "");
     }
 
     var limit = 75;
 
-    private func recomputeSortedPosts() {
-        switch sortOption {
-        case .newest:
-            sortedPosts = posts;
-        case .oldest:
-            sortedPosts = posts.reversed();
-        case .highestScore:
-            sortedPosts = posts.sorted { $0.score.total > $1.score.total };
-        case .mostFaved:
-            sortedPosts = posts.sorted { $0.fav_count > $1.fav_count };
+    @ViewBuilder
+    private var emptyState: some View {
+        if isLoading || !hasLoaded {
+            ProgressView("Loading favorites...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if loadFailed {
+            PostLoadFailedView { await loadPosts(); }
+        } else if !allLoaded {
+            BlacklistSkippedView { await loadMorePosts(); }
+        } else {
+            ContentUnavailableView("No favorites yet", systemImage: "heart")
         }
     }
 
     var body: some View {
         ScrollView(.vertical) {
-            if posts.count == 0 {
-                ProgressView(infoText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if posts.isEmpty {
+                emptyState
             }
-            PaginatedPostGrid(posts: sortedPosts, allLoaded: allLoaded, loadMore: loadMorePosts) { _, post in
+            PaginatedPostGrid(posts: posts, allLoaded: allLoaded, loadMore: loadMorePosts) { _, post in
                 if let idx = posts.firstIndex(where: { $0.id == post.id }) {
                     FavoriteGridCell(
                         post: $posts[idx],
                         search: searchTag,
                         onUnfavorite: {
-                            withAnimation {
-                                posts.removeAll { $0.id == post.id }
-                                recomputeSortedPosts();
-                            }
+                            withAnimation { posts.removeAll { $0.id == post.id } }
                         }
                     )
                 }
@@ -64,12 +77,15 @@ struct FavoritesView: View {
         }
         .scrollPosition(id: $scrolledPostID)
         .task {
-            if posts.count == 0 {
-                await loadPosts()
+            if posts.isEmpty {
+                await loadPosts();
             }
         }
-        .onChange(of: posts) { recomputeSortedPosts(); }
-        .onChange(of: sortOption) { recomputeSortedPosts(); }
+        .onChange(of: sortOption) {
+            posts = [];
+            hasLoaded = false;
+            Task { await loadPosts(); }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("Favorites")
         .toolbar {
@@ -86,36 +102,38 @@ struct FavoritesView: View {
             }
         }
         .refreshable {
-            page = 1;
-            allLoaded = false;
-            let result = await fetchRecentPosts(page, limit, searchTag);
-            posts = result.posts;
-            allLoaded = !result.hasMore;
-            prefetchThumbnails(for: posts);
+            await loadPosts();
         }
     }
 
     func loadPosts() async {
-        infoText = "Loading favorites...";
-        page = 1;
-        allLoaded = false;
-        let result = await fetchRecentPosts(page, limit, searchTag);
-        posts = result.posts;
+        loadGeneration += 1;
+        let generation = loadGeneration;
+        isLoading = true;
+        let result = await fetchRecentPosts(1, limit, searchTag);
+        // A newer load (sort change, second refresh) supersedes this one.
+        guard generation == loadGeneration else { return; }
+        isLoading = false;
+        hasLoaded = true;
+        loadFailed = result.failed;
+        guard !result.failed else { return; }
+        page = result.page;
         allLoaded = !result.hasMore;
-        if posts.count == 0 {
-            infoText = "No favorites found";
-        }
+        posts = result.posts;
         prefetchThumbnails(for: posts);
     }
 
     func loadMorePosts() async {
         guard !isLoading, !allLoaded else { return; }
+        let generation = loadGeneration;
         isLoading = true;
-        page += 1;
-        let result = await fetchRecentPosts(page, limit, searchTag);
+        let result = await fetchRecentPosts(page + 1, limit, searchTag);
+        guard generation == loadGeneration else { return; }
+        isLoading = false;
+        guard !result.failed else { return; }
+        page = result.page;
         allLoaded = !result.hasMore;
         posts += result.posts;
-        isLoading = false;
         prefetchThumbnails(for: result.posts);
     }
 

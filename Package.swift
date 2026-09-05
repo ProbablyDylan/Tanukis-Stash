@@ -16,7 +16,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/elai950/AlertToast.git", from: "1.3.9"),
-        .package(url: "https://github.com/Jake-Short/swiftui-image-viewer.git", from: "2.3.1"),
         .package(url: "https://github.com/onevcat/Kingfisher.git", from: "8.0.0"),
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
     ],
@@ -24,7 +23,6 @@ let package = Package(
         .target(
             name: "Tanukis Stash",
             dependencies: [
-                .product(name: "ImageViewerRemote", package: "swiftui-image-viewer"),
                 .product(name: "AlertToast", package: "AlertToast"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "GRDB", package: "GRDB.swift")

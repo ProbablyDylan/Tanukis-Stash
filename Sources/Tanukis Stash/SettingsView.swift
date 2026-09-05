@@ -259,8 +259,15 @@ struct LoginButton: View {
     @State private var ShowAlert: Bool = false;
     var body: some View {
         if (AUTHENTICATED) {
+            // The launch task re-runs login() from stored credentials, so the
+            // key has to go or the next launch silently signs back in. The
+            // username stays as a convenience for re-login.
             Button("Logout") {
                 AUTHENTICATED = false;
+                API_KEY = "";
+                UserDefaults.standard.removeObject(forKey: UDKey.apiKey);
+                UserDefaults.standard.removeObject(forKey: UDKey.userIcon);
+                UserDefaults.standard.removeObject(forKey: UDKey.userBlacklist);
             }.foregroundColor(.red)
         } else {
             Button("Login") {

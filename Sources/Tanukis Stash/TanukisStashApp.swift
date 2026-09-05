@@ -15,6 +15,7 @@ struct TanukisStashApp: App {
         ImageCacheConfig.apply();
         ImageCacheConfig.cleanExpired();
         configureAudioSession();
+        Task.detached(priority: .background) { sweepStaleMediaTemp(); }
     }
 
     private func configureAudioSession() {

@@ -21,28 +21,48 @@ struct SearchView: View {
     @Environment(\.pushDestination) private var pushDestination;
     @State private var activeSearch: String;
 
-    @State var infoText: String = ""
     @State private var scrolledPostID: Int?;
     @State private var isLoading: Bool = false;
+    @State private var hasLoaded: Bool = false;
+    @State private var loadFailed: Bool = false;
     @State private var allLoaded: Bool = false;
     @State private var isSearchActive: Bool = false;
 
     var limit = 75;
-    var loadingText = "Loading posts...";
-    var noPostsFoundText = "No posts found";
 
     init(search: String) {
         self.search = search;
         self.activeSearch = search;
     }
-    
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if isLoading || !hasLoaded {
+            ProgressView("Loading posts...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if loadFailed {
+            PostLoadFailedView { await getPosts(append: false); }
+        } else if !allLoaded {
+            BlacklistSkippedView { await getPosts(append: true); }
+        } else {
+            ContentUnavailableView("No posts found", systemImage: "magnifyingglass")
+        }
+    }
+
+    // A new query starts from a clean slate so the previous query's terminal
+    // state can't flash before the spinner.
+    private func resetForNewQuery() {
+        posts = [];
+        hasLoaded = false;
+        loadFailed = false;
+    }
+
     var postGrid: some View {
         ScrollView(.vertical) {
             // Must remain an eager child of the .searchable hierarchy — LazyVStack/LazyVGrid would suppress \.isSearching.
             SearchActiveReader(isActive: $isSearchActive)
-            if(posts.count == 0) {
-                ProgressView(infoText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if posts.isEmpty {
+                emptyState
             }
             PaginatedPostGrid(posts: $posts, search: activeSearch, allLoaded: allLoaded) {
                 await getPosts(append: true);
@@ -102,7 +122,7 @@ struct SearchView: View {
                 suggestionTask?.cancel();
                 withAnimation(.snappy) { searchSuggestions = []; }
                 activeSearch = "";
-                posts = [];
+                resetForNewQuery();
                 Task {
                     await getPosts(append: false);
                 }
@@ -123,7 +143,7 @@ struct SearchView: View {
                 dismissSearch();
             } else {
                 activeSearch = search;
-                posts = [];
+                resetForNewQuery();
                 Task.init {
                     await getPosts(append: false);
                     withAnimation(.snappy) { searchSuggestions.removeAll(); }
@@ -139,32 +159,24 @@ struct SearchView: View {
         let task = Task {
             isLoading = true;
             defer { isLoading = false; }
-            infoText = loadingText;
             // Commit page/allLoaded only after the cancellation guard — a cancelled
             // append that already bumped `page` silently skips a page of results.
-            let newPosts: [PostContent];
+            let result = await fetchRecentPosts(append ? page + 1 : 1, limit, activeSearch);
+            guard !Task.isCancelled else { return; }
             if append {
-                let nextPage = page + 1;
-                let result = await fetchRecentPosts(nextPage, limit, activeSearch);
-                guard !Task.isCancelled else { return; }
-                page = nextPage;
-                allLoaded = !result.hasMore;
-                newPosts = result.posts;
-                posts += newPosts;
+                // A failed append leaves the page counter alone; the grid's
+                // load-more fallback retries the same page.
+                guard !result.failed else { return; }
+                posts += result.posts;
             } else {
-                let result = await fetchRecentPosts(1, limit, activeSearch);
-                guard !Task.isCancelled else { return; }
-                page = 1;
-                allLoaded = !result.hasMore;
-                newPosts = result.posts;
-                posts = newPosts;
+                hasLoaded = true;
+                loadFailed = result.failed;
+                guard !result.failed else { return; }
+                posts = result.posts;
             }
-
-            if posts.count == 0 {
-                infoText = noPostsFoundText;
-            }
-
-            prefetchThumbnails(for: newPosts);
+            page = result.page;
+            allLoaded = !result.hasMore;
+            prefetchThumbnails(for: result.posts);
         };
         loadTask = task;
         await task.value;

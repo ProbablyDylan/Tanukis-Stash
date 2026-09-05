@@ -1,4 +1,5 @@
 import Foundation
+import Kingfisher
 import LinkPresentation
 import Photos
 import os.log
@@ -9,7 +10,6 @@ private enum DownloadError: Error {
     case albumCreationFailed
     case assetCreationFailed
     case noVideoURL
-    case moveError
 }
 
 private actor AlbumManager {
@@ -93,35 +93,17 @@ func saveImageDataToStashAlbum(data: Data, uniformTypeIdentifier: String) async 
     }
 }
 
-func saveVideoToStashAlbum(url: URL) async throws {
+// The temp copy from `downloadToTemp` already carries a `.mp4` extension, which
+// Photos needs to recognise the asset, and it doubles as the share-sheet cache.
+func saveVideoToStashAlbum(post: PostContent) async throws {
     let album = try await findOrCreateStashAlbum();
-
-    let (tempURL, _) = try await URLSession.shared.download(from: url);
-    defer { try? FileManager.default.removeItem(at: tempURL); }
-
-    // Ensure the destination has an explicit .mp4 extension so Photos recognises it.
-    guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-        throw DownloadError.assetCreationFailed;
-    }
-    var filename = url.lastPathComponent;
-    if !filename.hasSuffix(".mp4") { filename += ".mp4"; }
-    let destinationURL = documentsDir.appendingPathComponent(filename);
-
-    do {
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            try FileManager.default.removeItem(at: destinationURL);
-        }
-        try FileManager.default.moveItem(at: tempURL, to: destinationURL);
-    } catch {
-        throw DownloadError.moveError;
-    }
-    defer { try? FileManager.default.removeItem(at: destinationURL); }
+    let fileURL = try await downloadToTemp(post: post);
 
     var placeholderID: String?;
     try await PHPhotoLibrary.shared().performChanges {
         let options = PHAssetResourceCreationOptions();
         let request = PHAssetCreationRequest.forAsset();
-        request.addResource(with: .video, fileURL: destinationURL, options: options);
+        request.addResource(with: .video, fileURL: fileURL, options: options);
         guard let placeholder = request.placeholderForCreatedAsset else {
             os_log("%{public}s", log: .default, "saveVideoToStashAlbum: placeholderForCreatedAsset was nil");
             return;
@@ -153,6 +135,25 @@ func getVideoLink(post: PostContent) -> URL? {
     return nil;
 }
 
+// `downloadToTemp` keeps `<postId>.<ext>` around so a save followed by a share
+// (or repeated shares) doesn't re-download. Nothing else prunes tmp, so the
+// app sweeps stale media at launch instead of relying on iOS storage pressure.
+func sweepStaleMediaTemp(olderThan maxAge: TimeInterval = 24 * 60 * 60) {
+    let fm = FileManager.default;
+    guard let items = try? fm.contentsOfDirectory(
+        at: fm.temporaryDirectory,
+        includingPropertiesForKeys: [.contentModificationDateKey]
+    ) else { return; }
+    let cutoff = Date(timeIntervalSinceNow: -maxAge);
+    for url in items {
+        let stem = url.deletingPathExtension().lastPathComponent;
+        guard !stem.isEmpty, stem.allSatisfy(\.isNumber) else { continue; }
+        guard let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+              modified < cutoff else { continue; }
+        try? fm.removeItem(at: url);
+    }
+}
+
 func downloadToTemp(post: PostContent) async throws -> URL {
     let ext = post.file.ext;
     let downloadURL: URL;
@@ -180,6 +181,18 @@ func downloadToTemp(post: PostContent) async throws -> URL {
     return destURL;
 }
 
+// Thumbnail for the link preview card. The sample is a still even for video
+// posts, and it's usually already in Kingfisher's cache from the grid.
+private func fetchLinkPreviewImage(post: PostContent) async -> UIImage? {
+    guard let urlString = post.sample.url ?? post.preview.url, let url = URL(string: urlString) else { return nil; }
+    do {
+        return try await KingfisherManager.shared.retrieveImage(with: url).image;
+    } catch {
+        os_log("%{public}s", log: .default, "Link preview image unavailable for post \(post.id): \(String(describing: error))");
+        return nil;
+    }
+}
+
 @MainActor
 func prepareAndShareContent(
     post: PostContent,
@@ -191,36 +204,35 @@ func prepareAndShareContent(
 ) {
     preparingShare.wrappedValue = true;
     Task {
+        defer { preparingShare.wrappedValue = false; }
         do {
-            let tempURL = try await downloadToTemp(post: post);
             if includeLink {
                 let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
-                if let postURL = URL(string: "https://\(domain)/posts/\(post.id)") {
-                    let item = PostRichLinkShareItem(postURL: postURL, fileURL: tempURL, postId: post.id);
-                    shareItems.wrappedValue = [item];
-                } else {
-                    shareItems.wrappedValue = [tempURL];
+                guard let postURL = URL(string: "https://\(domain)/posts/\(post.id)") else {
+                    throw URLError(.badURL);
                 }
+                let image = await fetchLinkPreviewImage(post: post);
+                shareItems.wrappedValue = [PostRichLinkShareItem(postURL: postURL, previewImage: image, postId: post.id)];
             } else {
+                let tempURL = try await downloadToTemp(post: post);
                 shareItems.wrappedValue = [tempURL];
             }
             showShareSheet.wrappedValue = true;
-            preparingShare.wrappedValue = false;
         } catch {
             os_log("%{public}s", log: .default, "prepareAndShareContent error: \(String(describing: error))");
-            preparingShare.wrappedValue = false; displayToastType.wrappedValue = .errorSaveFailed;
+            displayToastType.wrappedValue = .errorSaveFailed;
         }
     }
 }
 
 final class PostRichLinkShareItem: NSObject, UIActivityItemSource {
     let postURL: URL;
-    let fileURL: URL;
+    let previewImage: UIImage?;
     let postId: Int;
 
-    init(postURL: URL, fileURL: URL, postId: Int) {
+    init(postURL: URL, previewImage: UIImage?, postId: Int) {
         self.postURL = postURL;
-        self.fileURL = fileURL;
+        self.previewImage = previewImage;
         self.postId = postId;
         super.init();
     }
@@ -242,7 +254,7 @@ final class PostRichLinkShareItem: NSObject, UIActivityItemSource {
         metadata.originalURL = postURL;
         metadata.url = postURL;
         metadata.title = "Post #\(postId)";
-        if let image = UIImage(contentsOfFile: fileURL.path) {
+        if let image = previewImage {
             metadata.imageProvider = NSItemProvider(object: image);
             metadata.iconProvider = NSItemProvider(object: image);
         }
@@ -250,15 +262,16 @@ final class PostRichLinkShareItem: NSObject, UIActivityItemSource {
     }
 }
 
+@MainActor
 func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
+    // Flip to in-progress synchronously so the button reflects the tap at once.
+    showToast.wrappedValue = .inProgress;
     Task {
         do {
             guard await ensureAuthorized() else {
-                await MainActor.run { showToast.wrappedValue = .errorPhotosPermissionDenied; }
+                showToast.wrappedValue = .errorPhotosPermissionDenied;
                 return;
             }
-
-            await MainActor.run { showToast.wrappedValue = .inProgress; }
 
             let ext = String(post.file.ext);
 
@@ -271,10 +284,10 @@ func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
                 try await saveImageDataToStashAlbum(data: data, uniformTypeIdentifier: "com.compuserve.gif");
 
             case "webm", "mp4":
-                guard let videoURL = getVideoLink(post: post) else {
+                guard getVideoLink(post: post) != nil else {
                     throw DownloadError.noVideoURL;
                 }
-                try await saveVideoToStashAlbum(url: videoURL);
+                try await saveVideoToStashAlbum(post: post);
 
             default:
                 guard let urlString = post.file.url, let url = URL(string: urlString) else {
@@ -284,16 +297,13 @@ func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
                 try await saveImageDataToStashAlbum(data: data, uniformTypeIdentifier: "public.image");
             }
 
-            await MainActor.run { showToast.wrappedValue = .success; }
+            showToast.wrappedValue = .success;
 
         } catch DownloadError.noVideoURL {
-            await MainActor.run { showToast.wrappedValue = .errorNoVideoAvailable; }
-        } catch DownloadError.moveError {
-            os_log("%{public}s", log: .default, "saveFile: failed to move downloaded file to documents directory");
-            await MainActor.run { showToast.wrappedValue = .errorMoveFailed; }
+            showToast.wrappedValue = .errorNoVideoAvailable;
         } catch {
             os_log("%{public}s", log: .default, "saveFile error: \(String(describing: error))");
-            await MainActor.run { showToast.wrappedValue = .errorSaveFailed; }
+            showToast.wrappedValue = .errorSaveFailed;
         }
     }
 }

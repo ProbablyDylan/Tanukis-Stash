@@ -25,6 +25,10 @@ struct TagView: View {
     @State private var isLoading: Bool = false;
     @State private var allLoaded: Bool = false;
     @State private var initialLoadComplete: Bool = false;
+    @State private var loadFailed: Bool = false;
+    // Bumped by every fresh load so an in-flight load-more from before a
+    // refresh can't append its page (and its page number) on top of the reset.
+    @State private var loadGeneration: Int = 0;
     @State private var wikiExpanded: Bool = false;
     @State private var aliasesExpanded: Bool = false;
     @State private var relatedTagsExpanded: Bool = false;
@@ -116,6 +120,14 @@ struct TagView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
                     .transition(.opacity)
+            } else if posts.isEmpty {
+                if loadFailed {
+                    PostLoadFailedView { await loadPosts(); }
+                } else if !allLoaded {
+                    BlacklistSkippedView { await loadMorePosts(); }
+                } else {
+                    ContentUnavailableView("No posts found", systemImage: "magnifyingglass")
+                }
             }
 
             PaginatedPostGrid(posts: $posts, search: tagName, allLoaded: allLoaded) {
@@ -124,28 +136,9 @@ struct TagView: View {
         }
         .scrollPosition(id: $scrolledPostID)
         .task {
-            async let wikiFetch = fetchWikiPage(tagName: tagName);
-            async let detailFetch = fetchTagDetail(tagName: tagName);
-            async let aliasesFetch = fetchTagAliases(tagName: tagName);
+            async let metadata: Void = loadMetadata();
             async let postsLoad: Void = loadInitialPostsIfNeeded();
-
-            let fetchedWiki = await wikiFetch;
-            withAnimation(.smooth) { wiki = fetchedWiki }
-
-            let detail = await detailFetch;
-            tagDetail = detail;
-            withAnimation(.smooth) {
-                relatedTags = parseRelatedTags(detail?.related_tags).filter { $0 != tagName };
-            }
-
-            let fetchedAliases = await aliasesFetch;
-            withAnimation(.smooth) { aliases = fetchedAliases }
-
-            let allNames = relatedTags + aliases.map { $0.antecedent_name };
-            if !allNames.isEmpty {
-                tagCategories = await fetchTagCategories(names: allNames);
-            }
-
+            await metadata;
             await postsLoad;
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -163,16 +156,10 @@ struct TagView: View {
             }
         }
         .refreshable {
-            page = 1;
-            allLoaded = false;
-            async let wikiFetch = fetchWikiPage(tagName: tagName);
-            async let postsFetch = fetchRecentPosts(1, limit, tagName);
-            let fetchedWiki = await wikiFetch;
-            withAnimation(.smooth) { wiki = fetchedWiki }
-            let result = await postsFetch;
-            allLoaded = !result.hasMore;
-            withAnimation(.smooth) { posts = result.posts }
-            prefetchThumbnails(for: posts);
+            async let metadata: Void = loadMetadata();
+            async let postsLoad: Void = loadPosts();
+            await metadata;
+            await postsLoad;
         }
     }
 
@@ -224,6 +211,30 @@ struct TagView: View {
         searchSuggestions.removeAll { $0 == tag };
     }
 
+    // Wiki, related tags and aliases — shared by first load and pull-to-refresh.
+    func loadMetadata() async {
+        async let wikiFetch = fetchWikiPage(tagName: tagName);
+        async let detailFetch = fetchTagDetail(tagName: tagName);
+        async let aliasesFetch = fetchTagAliases(tagName: tagName);
+
+        let fetchedWiki = await wikiFetch;
+        withAnimation(.smooth) { wiki = fetchedWiki }
+
+        let detail = await detailFetch;
+        tagDetail = detail;
+        withAnimation(.smooth) {
+            relatedTags = parseRelatedTags(detail?.related_tags).filter { $0 != tagName };
+        }
+
+        let fetchedAliases = await aliasesFetch;
+        withAnimation(.smooth) { aliases = fetchedAliases }
+
+        let allNames = relatedTags + aliases.map { $0.antecedent_name };
+        if !allNames.isEmpty {
+            tagCategories = await fetchTagCategories(names: allNames);
+        }
+    }
+
     func loadInitialPostsIfNeeded() async {
         if posts.isEmpty {
             await loadPosts();
@@ -231,25 +242,29 @@ struct TagView: View {
     }
 
     func loadPosts() async {
-        page = 1;
-        allLoaded = false;
-        let result = await fetchRecentPosts(page, limit, tagName);
+        loadGeneration += 1;
+        let generation = loadGeneration;
+        let result = await fetchRecentPosts(1, limit, tagName);
+        guard generation == loadGeneration else { return; }
+        loadFailed = result.failed;
+        withAnimation(.smooth) { initialLoadComplete = true; }
+        guard !result.failed else { return; }
+        page = result.page;
         allLoaded = !result.hasMore;
-        withAnimation(.smooth) {
-            posts = result.posts;
-            initialLoadComplete = true;
-        }
+        withAnimation(.smooth) { posts = result.posts; }
         prefetchThumbnails(for: posts);
     }
 
     func loadMorePosts() async {
         guard !isLoading, !allLoaded else { return; }
         isLoading = true;
-        page += 1;
-        let result = await fetchRecentPosts(page, limit, tagName);
+        defer { isLoading = false; }
+        let generation = loadGeneration;
+        let result = await fetchRecentPosts(page + 1, limit, tagName);
+        guard generation == loadGeneration, !result.failed else { return; }
+        page = result.page;
         allLoaded = !result.hasMore;
         withAnimation(.smooth) { posts += result.posts }
-        isLoading = false;
         prefetchThumbnails(for: result.posts);
     }
 

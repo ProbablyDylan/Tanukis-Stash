@@ -30,20 +30,28 @@ struct PostContextMenu: ViewModifier {
                             systemImage: post.is_favorited ? "heart.slash" : "heart"
                         )
                     }
+                    // Voting the same direction again removes the vote, so the
+                    // label says which it will do. The result is written back so
+                    // PostView opens with the vote the user just cast.
                     Button {
-                        Task { _ = await votePost(postId: post.id, value: 1, no_unvote: false); }
+                        Task { if let vote = await votePost(postId: post.id, value: 1, no_unvote: false) { post.vote = vote; } }
                     } label: {
-                        Label("Upvote", systemImage: "arrowshape.up")
+                        Label(
+                            post.vote == 1 ? "Remove Upvote" : "Upvote",
+                            systemImage: post.vote == 1 ? "arrowshape.up.fill" : "arrowshape.up"
+                        )
                     }
                     Button {
-                        Task { _ = await votePost(postId: post.id, value: -1, no_unvote: false); }
+                        Task { if let vote = await votePost(postId: post.id, value: -1, no_unvote: false) { post.vote = vote; } }
                     } label: {
-                        Label("Downvote", systemImage: "arrowshape.down")
+                        Label(
+                            post.vote == -1 ? "Remove Downvote" : "Downvote",
+                            systemImage: post.vote == -1 ? "arrowshape.down.fill" : "arrowshape.down"
+                        )
                     }
                     Divider()
                 }
                 Button {
-                    displayToastType = .inProgress;
                     saveFile(post: post, showToast: $displayToastType);
                 } label: {
                     Label("Save to Photos", systemImage: "square.and.arrow.down")

@@ -187,6 +187,25 @@ private func blacklistCompareValue(_ actual: Int, against spec: String) -> Bool 
     return false;
 }
 
+// `urlQueryAllowed` leaves `+`, `&`, `=`, `;` and `#` alone, and Rails reads a
+// bare `+` as a space — so tags containing any of those need them escaped.
+private let queryComponentAllowed: CharacterSet = {
+    var set = CharacterSet.urlQueryAllowed;
+    set.remove(charactersIn: "+&=;#");
+    return set;
+}();
+
+// Builds `?a=b&c=d` with every key and value percent-encoded. Pass an ordered
+// list so the query is stable for logging.
+func queryString(_ items: KeyValuePairs<String, String>) -> String {
+    let pairs = items.map { key, value in
+        let k = key.addingPercentEncoding(withAllowedCharacters: queryComponentAllowed) ?? key;
+        let v = value.addingPercentEncoding(withAllowedCharacters: queryComponentAllowed) ?? value;
+        return "\(k)=\(v)";
+    };
+    return pairs.isEmpty ? "" : "?" + pairs.joined(separator: "&");
+}
+
 func fetchJSON<T: Decodable>(_ endpoint: String, logLabel: String) async -> T? {
     do {
         guard let data = await makeRequest(destination: endpoint, method: "GET", body: nil, contentType: "application/json") else { return nil; }
@@ -235,17 +254,9 @@ func updateBlacklist(tags: String) async -> Bool {
 }
 
 func fetchTags(_ text: String) async -> [TagSuggestion] {
-    do {
-        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? text;
-        let url: String = "/tags/autocomplete.json?search%5Bname_matches%5D=\(encoded)&expiry=7";
-
-        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-        if (data) == nil { return []; }
-        let tags: [TagContent] = try JSONDecoder().decode([TagContent].self, from: data!)
-        return tags.map { TagSuggestion(name: $0.name, category: $0.category, postCount: $0.post_count) };
-    } catch {
-        return [];
-    }
+    let url = "/tags/autocomplete.json" + queryString(["search[name_matches]": text, "expiry": "7"]);
+    let tags: [TagContent]? = await fetchJSON(url, logLabel: "tag autocomplete");
+    return (tags ?? []).map { TagSuggestion(name: $0.name, category: $0.category, postCount: $0.post_count) };
 }
 
 func isSingleTagQuery(_ query: String) -> Bool {
@@ -340,53 +351,106 @@ func fetchPool(poolId: Int) async -> PoolContent? {
     return await fetchJSON("/pools/\(poolId).json", logLabel: "pool \(poolId)");
 }
 
-func fetchComments(postId: Int) async -> [CommentContent] {
-    let comments: [CommentContent]? = await fetchJSON(
-        "/comments.json?group_by=comment&search%5Bpost_id%5D=\(postId)&limit=75",
-        logLabel: "comments for post \(postId)"
-    );
-    return (comments ?? []).filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
+let commentPageSize = 75;
+
+// One page of visible comments, oldest first. `hasMore` is true when the
+// server returned a full page, so the caller can ask for `page + 1`.
+func fetchComments(postId: Int, page: Int = 1) async -> (comments: [CommentContent], hasMore: Bool, failed: Bool) {
+    let url = "/comments.json" + queryString([
+        "group_by": "comment",
+        "search[post_id]": String(postId),
+        "search[order]": "id_asc",
+        "limit": String(commentPageSize),
+        "page": String(page),
+    ]);
+    guard let all: [CommentContent] = await fetchJSON(url, logLabel: "comments for post \(postId) page \(page)") else {
+        return ([], false, true);
+    }
+    let visible = all.filter { !$0.is_hidden }.sorted { $0.created_at < $1.created_at };
+    return (visible, all.count >= commentPageSize, false);
 }
 
 func getComment(commentId: Int) async -> CommentContent? {
     return await fetchJSON("/comments/\(commentId).json", logLabel: "comment \(commentId)");
 }
 
-func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String) async -> (posts: [PostContent], hasMore: Bool) {
+struct PostFetchResult {
+    var posts: [PostContent];
+    // True when the server returned a full page, so `page + 1` may have more.
+    var hasMore: Bool;
+    // The last page actually fetched — can exceed the requested page when the
+    // blacklist emptied intermediate pages. Callers should resume from here.
+    var page: Int;
+    // Network or decode failure, as opposed to a genuinely empty result.
+    var failed: Bool;
+
+    static func failure(page: Int) -> PostFetchResult {
+        return PostFetchResult(posts: [], hasMore: false, page: page, failed: true);
+    }
+}
+
+// The e621 favorites listing is a separate endpoint; `fav:<me>` is routed
+// there so the grid gets favorite order rather than post-id order.
+private func postListingPath(tags: String, page: Int, limit: Int) -> String {
+    let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
+    let query: String;
+    if tags == "fav:\(username)" {
+        query = queryString(["limit": String(limit), "page": String(page)]);
+        return "/favorites.json" + query + "&" + postApiFormat;
+    }
+    query = queryString(["tags": tags, "limit": String(limit), "page": String(page)]);
+    return "/posts.json" + query + "&" + postApiFormat;
+}
+
+private func currentBlacklistLines() -> [String] {
+    guard UserDefaults.standard.bool(forKey: UDKey.enableBlacklist) else { return []; }
+    let raw = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
+    return raw.lowercased()
+        .split(separator: "\n")
+        .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty };
+}
+
+private func fetchPostPage(_ page: Int, _ limit: Int, _ tags: String, blacklist: [String]) async -> PostFetchResult {
+    let url = postListingPath(tags: tags, page: page, limit: limit);
+    guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else {
+        return .failure(page: page);
+    }
     do {
-        let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
-        let encoded = tags.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-        let url: String;
-
-        if (tags == "fav:\(username)") {
-            url = "/favorites.json?limit=\(limit)&page=\(page)&\(postApiFormat)"
-        } else {
-            url = "/posts.json?tags=\(encoded ?? "")&limit=\(limit)&page=\(page)&\(postApiFormat)"
+        let parsed = try JSONDecoder().decode([PostContent].self, from: data);
+        var posts = parsed.filter { $0.preview.url != nil };
+        if !blacklist.isEmpty {
+            posts = posts.filter { !isPostBlacklisted($0, blacklistedArray: blacklist) };
         }
-
-        let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json");
-
-        if (data) == nil {
-            os_log("Failed to fetch posts", log: .default);
-            return ([], false);
-        }
-
-        let parsedData = try JSONDecoder().decode([PostContent].self, from: data!)
-        let hasMore = parsedData.count >= limit;
-
-        var filteredPosts = parsedData.filter { $0.preview.url != nil };
-
-        // If the blacklist is enabled, filter out blacklisted posts
-        if (UserDefaults.standard.bool(forKey: UDKey.enableBlacklist)) {
-            let blacklistedTags = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
-            let blacklistedArray = blacklistedTags.lowercased().split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty };
-            filteredPosts = filteredPosts.filter { !isPostBlacklisted($0, blacklistedArray: blacklistedArray) };
-        }
-
-        return (filteredPosts, hasMore);
+        return PostFetchResult(posts: posts, hasMore: parsed.count >= limit, page: page, failed: false);
     } catch {
-        os_log("Error! %{public}@", log: .default, String(describing: error));
-        return ([], false);
+        os_log("Error decoding posts: %{public}@", log: .default, String(describing: error));
+        return .failure(page: page);
+    }
+}
+
+// Pages that the blacklist empties completely would leave the grid with no
+// cell to trigger load-more, so keep walking forward (bounded) until a page
+// yields something or the listing ends.
+private let maxEmptyPagesToSkip = 4;
+
+// Pass `skipEmptyPages: false` for one-shot lookups (a single thumbnail) where
+// walking forward would be wasted requests. When the skip budget runs out the
+// result is `posts: []` with `hasMore: true`; callers must offer a way to
+// continue from `result.page + 1` rather than treat it as the end.
+func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String, skipEmptyPages: Bool = true) async -> PostFetchResult {
+    let blacklist = currentBlacklistLines();
+    var current = page;
+    var skipped = 0;
+    while true {
+        let result = await fetchPostPage(current, limit, tags, blacklist: blacklist);
+        if result.failed || !result.posts.isEmpty || !result.hasMore || !skipEmptyPages || skipped >= maxEmptyPagesToSkip {
+            return result;
+        }
+        if Task.isCancelled { return result; }
+        skipped += 1;
+        current += 1;
+        os_log("Page %{public}d fully blacklisted, trying page %{public}d", log: .default, current - 1, current);
     }
 }
 
@@ -406,16 +470,19 @@ func unFavoritePost(postId: Int) async -> Bool {
 }
 
 
-func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int {
+// Returns the user's resulting vote (-1, 0, 1), or nil when the request failed
+// so callers can leave their displayed vote untouched.
+func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int? {
     let url = "/posts/\(postId)/votes.json"
-    let data = await makeRequest(destination: url, method: "POST", body: "score=\(value)&no_unvote=\(no_unvote)".data(using: .utf8), contentType: "application/x-www-form-urlencoded");
-    if (data == nil) { return 0; }
-    do {
-        let json = try JSONDecoder().decode(VoteResponse.self, from: data!);
-        return json.our_score ?? 0
+    guard let data = await makeRequest(destination: url, method: "POST", body: "score=\(value)&no_unvote=\(no_unvote)".data(using: .utf8), contentType: "application/x-www-form-urlencoded") else {
+        return nil;
     }
-    catch {
-        return 0
+    do {
+        let json = try JSONDecoder().decode(VoteResponse.self, from: data);
+        return json.our_score ?? 0;
+    } catch {
+        os_log("Error decoding vote response: %{public}@", log: .default, String(describing: error));
+        return nil;
     }
 }
 
@@ -425,17 +492,14 @@ func fetchWikiPage(tagName: String) async -> WikiPage? {
 }
 
 func fetchTagDetail(tagName: String) async -> TagDetail? {
-    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
-    let tags: [TagDetail]? = await fetchJSON("/tags.json?search%5Bname_matches%5D=\(encoded)", logLabel: "tag detail for \(tagName)");
+    let url = "/tags.json" + queryString(["search[name_matches]": tagName]);
+    let tags: [TagDetail]? = await fetchJSON(url, logLabel: "tag detail for \(tagName)");
     return tags?.first;
 }
 
 func fetchTagAliases(tagName: String) async -> [TagAlias] {
-    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? tagName;
-    let aliases: [TagAlias]? = await fetchJSON(
-        "/tag_aliases.json?search%5Bconsequent_name%5D=\(encoded)&search%5Bstatus%5D=active",
-        logLabel: "tag aliases for \(tagName)"
-    );
+    let url = "/tag_aliases.json" + queryString(["search[consequent_name]": tagName, "search[status]": "active"]);
+    let aliases: [TagAlias]? = await fetchJSON(url, logLabel: "tag aliases for \(tagName)");
     return aliases ?? [];
 }
 
@@ -464,9 +528,8 @@ func tagCategoryColor(_ category: Int) -> Color {
 
 func fetchTagCategories(names: [String]) async -> [String: Int] {
     guard !names.isEmpty else { return [:]; }
-    let joined = names.joined(separator: ",");
-    let encoded = joined.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? joined;
-    let tags: [TagDetail]? = await fetchJSON("/tags.json?search%5Bname%5D=\(encoded)&limit=\(names.count)", logLabel: "tag categories");
+    let url = "/tags.json" + queryString(["search[name]": names.joined(separator: ","), "limit": String(names.count)]);
+    let tags: [TagDetail]? = await fetchJSON(url, logLabel: "tag categories");
     var map = [String: Int]();
     for tag in tags ?? [] { map[tag.name] = tag.category; }
     return map;
@@ -488,6 +551,7 @@ func makeRequest(destination: String, method: String, body: Data?, contentType: 
     }
     var request = URLRequest(url: url)
     request.httpMethod = method
+    request.timeoutInterval = 30;
     request.addValue(contentType, forHTTPHeaderField: "Content-Type")
     request.addValue(userAgent, forHTTPHeaderField: "User-Agent")
 
