@@ -12,10 +12,27 @@ import os.log
 @MainActor
 struct PostView: View {
     @State private var showImageViewer: Bool = false;
-    let post: PostContent;
+    // @State (not `let`) so a vote or favorite writes straight back into the
+    // score/fav_count PostMetadataBar reads, instead of only the local
+    // favorited/our_score toggles used for the toolbar icons.
+    @State private var post: PostContent;
     let search: String;
     var highlightCommentId: Int? = nil;
     @State var url: String = "";
+
+    init(post: PostContent, search: String, highlightCommentId: Int? = nil) {
+        _post = State(initialValue: post);
+        self.search = search;
+        self.highlightCommentId = highlightCommentId;
+    }
+
+    // Overlays any stats a vote/favorite already recorded for this post. This
+    // matters beyond the current @State: if this PostView was itself reached
+    // from another PostView (e.g. a related/child post), its own copy has no
+    // path back to that other view's array — see PostStatsSync.swift.
+    private var displayPost: PostContent {
+        pendingPostStatsUpdate(for: post.id) ?? post;
+    }
 
     @State private var displayToastType: MediaActionState = .idle;
     @State private var favorited: Bool = false;
@@ -47,7 +64,7 @@ struct PostView: View {
                         )
                 }
                 .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
-                    PostMetadataBar(post: post)
+                    PostMetadataBar(post: displayPost)
                     RelatedPostsView(post: post, search: search)
                         .padding(10)
                     if !post.description.isEmpty {
@@ -93,7 +110,10 @@ struct PostView: View {
                                 let success = wasFavorited
                                     ? await unFavoritePost(postId: post.id)
                                     : await favoritePost(postId: post.id);
-                                if !success { favorited = wasFavorited; }
+                                guard success else { favorited = wasFavorited; return; }
+                                post.is_favorited = !wasFavorited;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
                             }
                         } label: {
                             Image(systemName: favorited ? "heart.fill" : "heart")
@@ -105,7 +125,13 @@ struct PostView: View {
                     ToolbarSpacer(.fixed, placement: .bottomBar)
                     ToolbarItemGroup(placement: .bottomBar) {
                         Button {
-                            Task { our_score = await votePost(postId: post.id, value: 1, no_unvote: false) }
+                            Task {
+                                guard let ourScore = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                                our_score = ourScore;
+                                post.vote = ourScore;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
+                            }
                         } label: {
                             Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
                                 .imageScale(.large)
@@ -114,7 +140,13 @@ struct PostView: View {
                         }
                         .disabled(!score_valid)
                         Button {
-                            Task { our_score = await votePost(postId: post.id, value: -1, no_unvote: false) }
+                            Task {
+                                guard let ourScore = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                                our_score = ourScore;
+                                post.vote = ourScore;
+                                await refreshPostStats();
+                                recordPostStatsUpdate(post);
+                            }
                         } label: {
                             Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
                                 .imageScale(.large)
@@ -128,7 +160,7 @@ struct PostView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Menu {
                         Button {
-                            Task { displayToastType = .inProgress; saveFile(post: post, showToast: $displayToastType) }
+                            saveFile(post: post, showToast: $displayToastType);
                         } label: {
                             Label("Save to Photos", systemImage: "square.and.arrow.down")
                         }
@@ -143,20 +175,7 @@ struct PostView: View {
                             Label("Share Content", systemImage: "photo")
                         }
                     } label: {
-                        Group {
-                            if displayToastType == .inProgress || preparingShare {
-                                ProgressView()
-                                    .transition(.scale.combined(with: .opacity))
-                            } else {
-                                Image(systemName: displayToastType == .success ? "checkmark.circle.fill" : "square.and.arrow.up")
-                                    .imageScale(.large)
-                                    .foregroundStyle(displayToastType == .success ? Color.green : Color.primary)
-                                    .contentTransition(.symbolEffect(.replace))
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .animation(.smooth, value: displayToastType)
-                        .animation(.smooth, value: preparingShare)
+                        MediaActionMenuLabel(state: displayToastType, preparingShare: preparingShare)
                     }
                     .disabled(displayToastType == .inProgress || preparingShare)
                 }
@@ -179,9 +198,22 @@ struct PostView: View {
     // favorite and vote state are refreshed from a single request.
     func fetchCurrentPostState() async {
         guard let current = await getPost(postId: post.id) else { return; }
+        post = current;
         favorited = current.is_favorited;
         our_score = current.vote;
         score_valid = true;
+    }
+
+    // The vote/favorite endpoints don't reliably echo the post's new totals,
+    // so after a successful action we ask the server for the real numbers
+    // instead of guessing a delta client-side.
+    func refreshPostStats() async {
+        guard let current = await getPost(postId: post.id) else {
+            os_log("refreshPostStats: getPost returned nil for post %{public}d", log: .default, post.id);
+            return;
+        }
+        post.score = current.score;
+        post.fav_count = current.fav_count;
     }
 
 }
@@ -356,7 +388,7 @@ struct PoolCard: View {
         .task {
             guard pool == nil && firstPost == nil else { return };
             async let poolFetch = fetchPool(poolId: poolId);
-            async let postFetch = fetchRecentPosts(1, 1, "pool:\(poolId) order:id");
+            async let postFetch = fetchRecentPosts(1, 1, "pool:\(poolId) order:id", skipEmptyPages: false);
             pool = await poolFetch;
             firstPost = await postFetch.posts.first;
         }
@@ -524,18 +556,31 @@ struct CommentsView: View {
     @State private var isLoading: Bool = false;
     @State private var isExpanded: Bool = false;
     @State private var hasFetched: Bool = false;
+    @State private var page: Int = 1;
+    @State private var hasMore: Bool = false;
+    @State private var loadFailed: Bool = false;
 
     var body: some View {
         VStack(alignment: .leading) {
             DisclosureGroup(isExpanded: $isExpanded) {
-                if isLoading {
+                if isLoading && comments.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8);
                 } else if comments.isEmpty {
-                    Text(hasFetched ? "No comments" : "")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading);
+                    if loadFailed {
+                        HStack {
+                            Text("Couldn't load comments")
+                                .foregroundStyle(.secondary);
+                            Spacer();
+                            Button("Retry") { Task { await loadPage(1); } }
+                                .buttonStyle(.bordered);
+                        }
+                    } else {
+                        Text(hasFetched ? "No comments" : "")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading);
+                    }
                 } else {
                     ScrollViewReader { proxy in
                         VStack(alignment: .leading, spacing: 12) {
@@ -547,6 +592,19 @@ struct CommentsView: View {
                                 .id(comment.id);
                                 if comment.id != comments.last?.id {
                                     Divider();
+                                }
+                            }
+                            if hasMore {
+                                Divider();
+                                if isLoading {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, alignment: .center);
+                                } else {
+                                    Button(loadFailed ? "Retry" : "Load More Comments") {
+                                        Task { await loadPage(page + 1); }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .frame(maxWidth: .infinity, alignment: .center);
                                 }
                             }
                         }
@@ -571,13 +629,7 @@ struct CommentsView: View {
             }
             .onChange(of: isExpanded) {
                 if isExpanded && !hasFetched {
-                    Task {
-                        isLoading = true;
-                        let result = await fetchComments(postId: post.id);
-                        comments = result;
-                        isLoading = false;
-                        hasFetched = true;
-                    }
+                    Task { await loadPage(1); }
                 }
             }
             .onAppear {
@@ -586,6 +638,24 @@ struct CommentsView: View {
                 }
             }
         }
+    }
+
+    private func loadPage(_ target: Int) async {
+        guard !isLoading else { return; }
+        isLoading = true;
+        defer { isLoading = false; }
+        let result = await fetchComments(postId: post.id, page: target);
+        loadFailed = result.failed;
+        // A failed page leaves `page`/`hasMore` alone so the button retries it.
+        guard !result.failed else { return; }
+        if target == 1 {
+            comments = result.comments;
+        } else {
+            comments += result.comments;
+        }
+        page = target;
+        hasMore = result.hasMore;
+        hasFetched = true;
     }
 }
 

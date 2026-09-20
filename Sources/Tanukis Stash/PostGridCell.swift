@@ -5,8 +5,15 @@ struct PostGridCell: View, Equatable {
     let post: PostContent;
     @Environment(\.isPadRegular) private var isPadRegular;
 
+    // PostContent's == now compares every field (see Model_Post.swift), so
+    // this could just delegate to it — kept explicit and narrower since it's
+    // cheaper to compare four fields than the whole struct on every cell in
+    // a scrolling grid.
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.post.id == rhs.post.id;
+        lhs.post.id == rhs.post.id &&
+        lhs.post.score.total == rhs.post.score.total &&
+        lhs.post.fav_count == rhs.post.fav_count &&
+        lhs.post.comment_count == rhs.post.comment_count;
     }
 
     @ViewBuilder

@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct PostContextMenu: ViewModifier {
 
@@ -21,7 +22,8 @@ struct PostContextMenu: ViewModifier {
                             let success = wasFavorited
                                 ? await unFavoritePost(postId: post.id)
                                 : await favoritePost(postId: post.id);
-                            if !success { post.is_favorited = wasFavorited; return; }
+                            guard success else { post.is_favorited = wasFavorited; return; }
+                            await refreshStats();
                             if wasFavorited { onUnfavorite?(); }
                         }
                     } label: {
@@ -30,20 +32,36 @@ struct PostContextMenu: ViewModifier {
                             systemImage: post.is_favorited ? "heart.slash" : "heart"
                         )
                     }
+                    // Voting the same direction again removes the vote, so the
+                    // label says which it will do. The result is written back so
+                    // PostView opens with the vote the user just cast.
                     Button {
-                        Task { _ = await votePost(postId: post.id, value: 1, no_unvote: false); }
+                        Task {
+                            guard let ourScore = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
+                            post.vote = ourScore;
+                            await refreshStats();
+                        }
                     } label: {
-                        Label("Upvote", systemImage: "arrowshape.up")
+                        Label(
+                            post.vote == 1 ? "Remove Upvote" : "Upvote",
+                            systemImage: post.vote == 1 ? "arrowshape.up.fill" : "arrowshape.up"
+                        )
                     }
                     Button {
-                        Task { _ = await votePost(postId: post.id, value: -1, no_unvote: false); }
+                        Task {
+                            guard let ourScore = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
+                            post.vote = ourScore;
+                            await refreshStats();
+                        }
                     } label: {
-                        Label("Downvote", systemImage: "arrowshape.down")
+                        Label(
+                            post.vote == -1 ? "Remove Downvote" : "Downvote",
+                            systemImage: post.vote == -1 ? "arrowshape.down.fill" : "arrowshape.down"
+                        )
                     }
                     Divider()
                 }
                 Button {
-                    displayToastType = .inProgress;
                     saveFile(post: post, showToast: $displayToastType);
                 } label: {
                     Label("Save to Photos", systemImage: "square.and.arrow.down")
@@ -65,6 +83,17 @@ struct PostContextMenu: ViewModifier {
                 ActivityView(activityItems: shareItems)
             }
             .postToast(displayToastType: $displayToastType)
+    }
+
+    // The vote/favorite endpoints don't reliably echo the post's new totals,
+    // so after a successful action ask the server for the real numbers.
+    private func refreshStats() async {
+        guard let current = await getPost(postId: post.id) else {
+            os_log("PostContextMenu.refreshStats: getPost returned nil for post %{public}d", log: .default, post.id);
+            return;
+        }
+        post.score = current.score;
+        post.fav_count = current.fav_count;
     }
 }
 

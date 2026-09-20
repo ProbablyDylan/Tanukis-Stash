@@ -6,28 +6,27 @@ import SwiftUI
 // `PostWire` structs below and mapped onto the flatter model the views use.
 // See https://e621.net/forum_topics/63849
 
+// Equatable/Hashable are auto-synthesized from every stored property below —
+// do NOT add a custom id-only `==`/`hash(into:)`. @State (and @State arrays)
+// skip publishing a change when the new value is `==` the old one; an
+// id-only `==` makes a vote or favorite that only changes score/fav_count
+// look like "no change" and the view silently never redraws. ForEach/lookup
+// code that wants identity-only comparison already uses an explicit `.id`
+// predicate or `id:` keypath — nothing relies on `==` being id-only.
 struct PostContent: Decodable, Hashable {
-    static func == (lhs: PostContent, rhs: PostContent) -> Bool {
-        return lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id);
-    }
-    
     let id: Int;
     let created_at: String;
     let updated_at: String?;
     let file: File;
     let preview: Preview;
     let sample: Sample;
-    let score: Score;
+    var score: Score;
     let tags: Tags;
     let locked_tags: [String];
     let change_seq: Int;
     let flags: Flags;
     let rating: String;
-    let fav_count: Int;
+    var fav_count: Int;
     let sources: [String];
     let pools: [Int];
     let relationships: Relationships;

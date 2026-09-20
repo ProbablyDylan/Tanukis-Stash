@@ -77,7 +77,21 @@ func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
     }
 }
 
+// The export is regenerated once a day, so a populated cache younger than that
+// has nothing new to pull. Anything older (or empty) gets a full resync.
+private let tagCacheMaxAge: TimeInterval = 24 * 60 * 60;
+
+func tagCacheNeedsSync() -> Bool {
+    guard isTagCachePopulated() else { return true; }
+    let lastSync = UserDefaults.standard.double(forKey: UDKey.tagCacheLastSync);
+    return Date().timeIntervalSince1970 - lastSync >= tagCacheMaxAge;
+}
+
 func tagCacheSync() async {
+    guard tagCacheNeedsSync() else {
+        os_log("TagCache.sync: cache is fresh, skipping", log: .default);
+        return;
+    }
     let formatter = DateFormatter();
     formatter.dateFormat = "yyyy-MM-dd";
     formatter.timeZone = TimeZone(identifier: "America/New_York");
