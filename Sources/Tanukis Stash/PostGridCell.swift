@@ -75,6 +75,9 @@ struct PostGridCell: View, Equatable {
 
     private var statsOverlay: some View {
         VStack {
+            if post.isInPool || post.hasFamily {
+                membershipBadge
+            }
             Spacer()
             HStack(spacing: 2) {
                 if post.score.total != 0 {
@@ -92,15 +95,43 @@ struct PostGridCell: View, Equatable {
                     Text(post.comment_count.formatted(.number.notation(.compactName)))
                 }
             }
+            .cellOverlayStyle()
+            .frame(maxWidth: .infinity)
+            .padding(5.0)
+        }
+    }
+
+    // Top-trailing: pool membership (no count — pool size isn't in listings)
+    // and the parent+children count.
+    private var membershipBadge: some View {
+        HStack(spacing: 2) {
+            if post.isInPool {
+                Image(systemName: "rectangle.stack.fill")
+            }
+            if post.hasFamily {
+                Image(systemName: "square.on.square")
+                    .padding(.leading, post.isInPool ? 1 : 0)
+                if post.familyCount > 0 {
+                    Text(post.familyCount.formatted(.number.notation(.compactName)))
+                }
+            }
+        }
+        .cellOverlayStyle()
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(5.0)
+    }
+}
+
+private extension View {
+    // White bold 10pt text with the dark halo the stats row has always used.
+    func cellOverlayStyle() -> some View {
+        self
             .font(.system(size: 10))
             .fontWeight(.bold)
             .foregroundColor(Color.white)
             .compositingGroup()
             .shadow(color: .black, radius: 3, x: 0, y: 1)
             .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
-            .frame(maxWidth: .infinity)
-            .padding(5.0)
-        }
     }
 }
 
