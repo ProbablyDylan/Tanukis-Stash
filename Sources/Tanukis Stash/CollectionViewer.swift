@@ -421,7 +421,11 @@ private struct PagePopover: View {
             if hiddenCount > 0 {
                 Label(hiddenCount == 1 ? "1 page hidden" : "\(hiddenCount) pages hidden", systemImage: "eye.slash")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    // An explicit color, not `.secondary`: hierarchical styles are
+                    // painted through the popover material's vibrancy, which
+                    // settles ~0.35s after the presentation, so this row used to
+                    // pop in on its own.
+                    .foregroundStyle(Color(uiColor: .secondaryLabel))
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
             }
