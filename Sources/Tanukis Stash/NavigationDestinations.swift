@@ -39,18 +39,8 @@ struct PostDestination: Hashable {
     }
 }
 
-// pool payload is an optional prefetch optimization; identity is the id.
 struct PoolDestination: Hashable {
     let poolId: Int;
-    var pool: PoolContent? = nil;
-
-    static func == (lhs: PoolDestination, rhs: PoolDestination) -> Bool {
-        lhs.poolId == rhs.poolId;
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(poolId);
-    }
 }
 
 struct FavoritesDestination: Hashable {
@@ -87,7 +77,7 @@ struct AppNavigationDestinations: ViewModifier {
                 PostEntry(dest: dest)
             }
             .navigationDestination(for: PoolDestination.self) { dest in
-                CollectionViewer(primary: .pool(dest.poolId), pool: dest.pool)
+                CollectionViewer(primary: .pool(dest.poolId))
             }
             .navigationDestination(for: TagDestination.self) { dest in
                 TagView(tagName: dest.name)

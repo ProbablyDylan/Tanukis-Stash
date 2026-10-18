@@ -122,7 +122,7 @@ struct ContentView: View {
             NavigationStack(path: $detailPath) {
                 Group {
                     if let post = selectedPost {
-                        PostView(post: post, search: "")
+                        PostEntry(dest: PostDestination(post: post, search: ""))
                             .id(post.id)
                     } else {
                         ContentUnavailableView(

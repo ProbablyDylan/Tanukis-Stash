@@ -7,9 +7,6 @@ struct PostDetailContent: View {
     let post: PostContent;
     let search: String;
     var highlightCommentId: Int? = nil;
-    // PostView shows parent/child/pool cards; the viewer replaces them with
-    // its pager and collection switcher.
-    var showsRelated: Bool = true;
 
     @State private var showImageViewer: Bool = false;
     @State private var descExpanded: Bool = true;
@@ -31,10 +28,6 @@ struct PostDetailContent: View {
             }
             .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
             PostMetadataBar(post: post)
-            if showsRelated {
-                RelatedPostsView(post: post, search: search)
-                    .padding(10)
-            }
             if !post.description.isEmpty {
                 DisclosureGroup(isExpanded: $descExpanded) {
                     DTextView(text: post.description)

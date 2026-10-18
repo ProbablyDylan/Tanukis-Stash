@@ -23,8 +23,7 @@ struct CollectionViewer: View {
         others: [PostCollection] = [],
         seed: PostContent? = nil,
         search: String = "",
-        highlightCommentId: Int? = nil,
-        pool: PoolContent? = nil
+        highlightCommentId: Int? = nil
     ) {
         collections = [primary] + others;
         self.seed = seed;
@@ -35,10 +34,6 @@ struct CollectionViewer: View {
         // until the collection arrives.
         _posts = State(initialValue: seed.map { [$0] } ?? []);
         _scrolledId = State(initialValue: seed?.id);
-        _pool = State(initialValue: pool);
-        if let pool {
-            _poolNames = State(initialValue: [pool.id: Self.displayName(pool.name)]);
-        }
     }
 
     @State private var active: PostCollection;
@@ -153,8 +148,7 @@ struct CollectionViewer: View {
             PostDetailContent(
                 post: post,
                 search: search,
-                highlightCommentId: post.id == seed?.id ? highlightCommentId : nil,
-                showsRelated: posts.count == 1 && !isLoading
+                highlightCommentId: post.id == seed?.id ? highlightCommentId : nil
             )
         }
     }
