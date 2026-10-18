@@ -393,21 +393,17 @@ private struct PagePopover: View {
     let currentId: Int?;
     let onSelect: (Int) -> Void;
 
-    @State private var detailsExpanded = false;
     @State private var detailsHeight: CGFloat = 0;
 
-    private let collapsedDetailsHeight: CGFloat = 60;
-    private let expandedDetailsHeight: CGFloat = 200;
+    // Descriptions show in full; only an unusually long one scrolls inside the
+    // popover instead of running off the screen.
+    private let maxDetailsHeight: CGFloat = 280;
     private let maxWidth: CGFloat = 340;
 
     // Fits the thumbnails when there are few (and no description to wrap),
     // up to maxWidth; past that the strip scrolls.
     private var width: CGFloat {
         details == nil ? min(maxWidth, PageStrip.contentWidth(count: posts.count)) : maxWidth;
-    }
-
-    private var detailsIsTruncated: Bool {
-        detailsHeight > collapsedDetailsHeight;
     }
 
     var body: some View {
@@ -433,26 +429,17 @@ private struct PagePopover: View {
         .frame(width: width)
     }
 
-    // The description is clamped to a few lines; "More" reveals the rest in a
-    // short scroll. The natural height is measured inside the scroll view.
+    @ViewBuilder
     private func detailsView(_ text: String) -> some View {
-        let limit = detailsExpanded ? expandedDetailsHeight : collapsedDetailsHeight;
-        let height = detailsHeight > 0 ? min(detailsHeight, limit) : limit;
-        return VStack(alignment: .leading, spacing: 2) {
-            ScrollView(.vertical, showsIndicators: detailsExpanded) {
-                DTextView(text: text)
-                    .font(.footnote)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailsHeight = $0; }
-            }
-            .scrollDisabled(!detailsExpanded)
-            .frame(height: height)
-            if detailsIsTruncated {
-                Button(detailsExpanded ? "Less" : "More") {
-                    withAnimation(.snappy) { detailsExpanded.toggle(); }
-                }
-                .font(.caption.weight(.semibold))
-            }
+        let content = DTextView(text: text)
+            .font(.footnote)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailsHeight = $0; };
+        if detailsHeight > maxDetailsHeight {
+            ScrollView(.vertical) { content }
+                .frame(height: maxDetailsHeight)
+        } else {
+            content
         }
     }
 }
