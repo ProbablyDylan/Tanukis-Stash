@@ -164,6 +164,7 @@ struct PostContextPreview: UIViewRepresentable {
     private var previewSize: CGSize {
         let maxW: CGFloat = 300;
         let maxH: CGFloat = 400;
+        guard post.file.width > 0, post.file.height > 0 else { return CGSize(width: maxW, height: maxW); }
         let aspect = CGFloat(post.file.width) / CGFloat(post.file.height);
         let w = min(maxW, maxH * aspect);
         let h = w / aspect;

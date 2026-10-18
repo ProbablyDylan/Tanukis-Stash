@@ -172,13 +172,21 @@ func downloadToTemp(post: PostContent) async throws -> URL {
     let destURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(post.id).\(destExt)");
 
     if !FileManager.default.fileExists(atPath: destURL.path) {
-        let (downloadedURL, _) = try await URLSession.shared.download(from: downloadURL);
+        let (downloadedURL, response) = try await URLSession.shared.download(from: downloadURL);
+        try requireSuccess(response);
         if FileManager.default.fileExists(atPath: destURL.path) {
             try FileManager.default.removeItem(at: destURL);
         }
         try FileManager.default.moveItem(at: downloadedURL, to: destURL);
     }
     return destURL;
+}
+
+// A 404/5xx body would otherwise be saved or shared as if it were the media.
+private func requireSuccess(_ response: URLResponse) throws {
+    guard let code = response.getStatusCode(), (200..<300).contains(code) else {
+        throw URLError(.badServerResponse);
+    }
 }
 
 // Thumbnail for the link preview card. The sample is a still even for video
@@ -207,7 +215,7 @@ func prepareAndShareContent(
         defer { preparingShare.wrappedValue = false; }
         do {
             if includeLink {
-                let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+                let domain = apiDomain();
                 guard let postURL = URL(string: "https://\(domain)/posts/\(post.id)") else {
                     throw URLError(.badURL);
                 }
@@ -280,7 +288,8 @@ func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
                 guard let urlString = post.file.url, let url = URL(string: urlString) else {
                     throw DownloadError.assetCreationFailed;
                 }
-                let (data, _) = try await URLSession.shared.data(from: url);
+                let (data, response) = try await URLSession.shared.data(from: url);
+                try requireSuccess(response);
                 try await saveImageDataToStashAlbum(data: data, uniformTypeIdentifier: "com.compuserve.gif");
 
             case "webm", "mp4":
@@ -293,7 +302,8 @@ func saveFile(post: PostContent, showToast: Binding<MediaActionState>) {
                 guard let urlString = post.file.url, let url = URL(string: urlString) else {
                     throw DownloadError.assetCreationFailed;
                 }
-                let (data, _) = try await URLSession.shared.data(from: url);
+                let (data, response) = try await URLSession.shared.data(from: url);
+                try requireSuccess(response);
                 try await saveImageDataToStashAlbum(data: data, uniformTypeIdentifier: "public.image");
             }
 

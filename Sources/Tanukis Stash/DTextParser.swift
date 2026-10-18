@@ -316,40 +316,20 @@ struct DTextParser {
 
     // MARK: - Table parsing
 
+    // Tag-based, not line-based, so `[tr][td]a[/td][td]b[/td][/tr]` on one line
+    // parses the same as the one-cell-per-line layout. A row left unclosed ends
+    // at the next `[tr]` or the end of the table.
     private mutating func parseTable(_ content: String) -> DTextBlock {
-        var rows: [DTextTableRow] = []
-        let lines = content.components(separatedBy: "\n")
-        var i = 0
-
-        while i < lines.count {
-            let line = lines[i].trimmingCharacters(in: .whitespaces).lowercased()
-            if line.contains("[tr]") {
-                var cells: [DTextTableCell] = []
-                i += 1
-                while i < lines.count {
-                    let cellLine = lines[i].trimmingCharacters(in: .whitespaces)
-                    let cellLower = cellLine.lowercased()
-                    if cellLower.contains("[/tr]") { break }
-
-                    let isHeader = cellLower.hasPrefix("[th]")
-                    if isHeader || cellLower.hasPrefix("[td]") {
-                        let tag = isHeader ? "th" : "td"
-                        let openTag = "[\(tag)]"
-                        let closeTag = "[/\(tag)]"
-                        if let openRange = cellLine.range(of: openTag, options: .caseInsensitive),
-                           let closeRange = cellLine.range(of: closeTag, options: .caseInsensitive) {
-                            let cellContent = String(cellLine[openRange.upperBound..<closeRange.lowerBound])
-                            cells.append(DTextTableCell(isHeader: isHeader, content: parseInlines(cellContent)))
-                        }
-                    }
-                    i += 1
-                }
-                rows.append(DTextTableRow(cells: cells))
+        var rows: [DTextTableRow] = [];
+        for rowMatch in content.matches(of: /(?is)\[tr\](.*?)(?:\[\/tr\]|(?=\[tr\])|$)/) {
+            var cells: [DTextTableCell] = [];
+            for cellMatch in rowMatch.1.matches(of: /(?is)\[(th|td)\](.*?)\[\/\1\]/) {
+                let isHeader = cellMatch.1.lowercased() == "th";
+                cells.append(DTextTableCell(isHeader: isHeader, content: parseInlines(String(cellMatch.2))));
             }
-            i += 1
+            rows.append(DTextTableRow(cells: cells));
         }
-
-        return .table(rows: rows)
+        return .table(rows: rows);
     }
 
     // MARK: - Inline parsing (recursive descent)
@@ -376,7 +356,7 @@ struct DTextParser {
 
         while pos < input.endIndex {
             // Check for closing tag if we're inside a BBCode block
-            if let stop = stopTag {
+            if let stop = stopTag, input[pos] == "[" {
                 let closeTag = "[/\(stop)]";
                 if let endIdx = input.index(pos, offsetBy: closeTag.count, limitedBy: input.endIndex),
                    String(input[pos..<endIdx]).caseInsensitiveCompare(closeTag) == .orderedSame {
@@ -469,7 +449,10 @@ struct DTextParser {
 
     private mutating func tryParseBBCodeRecursive(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
         let sub = input[pos...];
-        let subLower = sub.lowercased();
+        // Only the tag's own length is lowercased, not everything after it.
+        func opens(_ tag: String) -> Bool {
+            sub.prefix(tag.count).lowercased() == tag;
+        }
 
         // Simple recursive tags: [b], [i], [u], [s], [sup], [sub], [tn]
         let recursiveTags: [(String, ([DTextInline]) -> DTextInline)] = [
@@ -484,7 +467,7 @@ struct DTextParser {
 
         for (tag, constructor) in recursiveTags {
             let open = "[\(tag)]";
-            if subLower.hasPrefix(open.lowercased()) {
+            if opens(open) {
                 var innerPos = input.index(pos, offsetBy: open.count);
                 let children = parseInlineNodes(input, pos: &innerPos, stopTag: tag);
                 return (constructor(children), innerPos);
@@ -492,7 +475,7 @@ struct DTextParser {
         }
 
         // [code]...[/code] inline — no recursion, content is literal
-        if subLower.hasPrefix("[code]") {
+        if opens("[code]") {
             let afterOpen = input.index(pos, offsetBy: 6);
             if let closeRange = input.range(of: "[/code]", options: .caseInsensitive, range: afterOpen..<input.endIndex) {
                 let content = String(input[afterOpen..<closeRange.lowerBound]);
@@ -501,7 +484,7 @@ struct DTextParser {
         }
 
         // [color=...]...[/color] — recursive children
-        if let match = sub.firstMatch(of: /(?i)^\[color=([^\]]+)\]/) {
+        if let match = sub.prefixMatch(of: /(?i)\[color=([^\]]+)\]/) {
             let colorName = String(match.1);
             var innerPos = match.range.upperBound;
             let children = parseInlineNodes(input, pos: &innerPos, stopTag: "color");
@@ -509,7 +492,7 @@ struct DTextParser {
         }
 
         // [spoiler]...[/spoiler] inline — recursive children
-        if subLower.hasPrefix("[spoiler]") {
+        if opens("[spoiler]") {
             spoilerCounter += 1;
             let sid = spoilerCounter;
             var innerPos = input.index(pos, offsetBy: 9);
@@ -518,9 +501,9 @@ struct DTextParser {
         }
 
         // [url=...]...[/url] — recursive children
-        if let match = sub.firstMatch(of: /(?i)^\[url=([^\]]+)\]/) {
+        if let match = sub.prefixMatch(of: /(?i)\[url=([^\]]+)\]/) {
             let rawUrl = String(match.1);
-            let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+            let domain = apiDomain();
             let urlStr = interceptE621URL(rawUrl, domain: domain);
             var innerPos = match.range.upperBound;
             let children = parseInlineNodes(input, pos: &innerPos, stopTag: "url");
@@ -560,7 +543,7 @@ struct DTextParser {
         // Validate it looks like a URL or relative path
         guard urlStr.hasPrefix("http") || urlStr.hasPrefix("/") || urlStr.hasPrefix("#") else { return nil; }
 
-        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+        let domain = apiDomain();
 
         // Resolve the URL
         let resolved: String;
@@ -621,34 +604,23 @@ struct DTextParser {
             if prevChar.isLetter || prevChar.isNumber { return nil; }
         }
 
-        let sub = input[pos...];
+        // Only post/pool/comment/topic/forum/artist start a reference; skip the
+        // regex for every other word.
+        guard "pcftaPCFTA".contains(input[pos]) else { return nil; }
+        guard let match = input[pos...].prefixMatch(of: /(?i)(post|pool|comment|topic|forum|artist)\s+#(\d+)/),
+              let id = Int(match.2) else { return nil; }
 
-        if let match = sub.firstMatch(of: /(?i)^post\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.postRef(id), match.range.upperBound);
+        let node: DTextInline;
+        switch match.1.lowercased() {
+        case "post": node = .postRef(id);
+        case "pool": node = .poolRef(id);
+        case "comment": node = .commentRef(id);
+        case "topic": node = .topicRef(id);
+        case "forum": node = .forumRef(id);
+        case "artist": node = .artistRef(id);
+        default: return nil;
         }
-        if let match = sub.firstMatch(of: /(?i)^pool\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.poolRef(id), match.range.upperBound);
-        }
-        if let match = sub.firstMatch(of: /(?i)^comment\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.commentRef(id), match.range.upperBound);
-        }
-        if let match = sub.firstMatch(of: /(?i)^topic\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.topicRef(id), match.range.upperBound);
-        }
-        if let match = sub.firstMatch(of: /(?i)^forum\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.forumRef(id), match.range.upperBound);
-        }
-        if let match = sub.firstMatch(of: /(?i)^artist\s+#(\d+)/) {
-            guard let id = Int(match.1) else { return nil; }
-            return (.artistRef(id), match.range.upperBound);
-        }
-
-        return nil;
+        return (node, match.range.upperBound);
     }
 
     // MARK: - User mentions: @username
@@ -695,7 +667,7 @@ struct DTextParser {
         if components.count >= 2 && components[0] == "wiki_pages" && components[1] == "show_or_new" {
             if let queryItems = URLComponents(string: urlStr)?.queryItems,
                let title = queryItems.first(where: { $0.name == "title" })?.value {
-                return "tanuki://wiki/\(title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title)";
+                return "tanuki://wiki/\(pathSegment(title))";
             }
         }
 
@@ -712,14 +684,14 @@ struct DTextParser {
         // /wiki_pages/tag_name
         if components.count >= 2 && components[0] == "wiki_pages" {
             let name = components[1];
-            return "tanuki://wiki/\(name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name)";
+            return "tanuki://wiki/\(pathSegment(name))";
         }
 
         // /posts?tags=search+terms
         if components.count >= 1 && components[0] == "posts" {
             if let queryItems = URLComponents(string: urlStr)?.queryItems,
                let tags = queryItems.first(where: { $0.name == "tags" })?.value {
-                return "tanuki://search/\(tags.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tags)";
+                return "tanuki://search/\(pathSegment(tags))";
             }
         }
 
@@ -734,6 +706,7 @@ struct DTextParser {
     // MARK: - Bare URLs
 
     private func tryParseBareURL(_ input: String, from pos: String.Index) -> (DTextInline, String.Index)? {
+        guard input[pos] == "h" else { return nil }
         let sub = input[pos...]
         guard sub.hasPrefix("http://") || sub.hasPrefix("https://") else { return nil }
 
@@ -761,7 +734,7 @@ struct DTextParser {
         let urlStr = String(input[pos..<end])
         guard urlStr.count > 8 else { return nil }
 
-        let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+        let domain = apiDomain();
         let resolved = interceptE621URL(urlStr, domain: domain);
         let displayText = urlStr;  // Always show original URL as display text
         return (.link(DTextLink(url: resolved, display: [.text(displayText)])), end);

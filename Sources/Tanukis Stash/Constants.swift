@@ -21,6 +21,11 @@ enum UDKey {
     static let showBlacklistedInCollections = "SHOW_BLACKLISTED_IN_COLLECTIONS";
 }
 
+// Site the app talks to; e926 (safe) unless the user switched it in Settings.
+func apiDomain() -> String {
+    UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+}
+
 // Pools and related posts keep blacklisted pages by default: a comic with a page
 // missing is worse than one page you'd rather not see. Unset means on.
 func showsBlacklistedInCollections() -> Bool {

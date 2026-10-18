@@ -116,7 +116,7 @@ struct VideoView: View {
     }
 
     private var browserURL: URL? {
-        let host = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+        let host = apiDomain();
         return URL(string: "https://\(host)/posts/\(post.id)");
     }
 

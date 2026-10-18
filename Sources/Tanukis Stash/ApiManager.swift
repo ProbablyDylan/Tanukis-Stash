@@ -39,139 +39,163 @@ func login() async -> Bool {
     return true;
 }
 
-func isPostBlacklisted(_ post: PostContent, blacklistedArray: [String]) -> Bool {
-    let tagSet = Set(post.tags.all.map { $0.lowercased() });
+// One blacklist line, compiled once per fetch. Tokenizing and building wildcard
+// regexes per post would repeat that work for every post on every page.
+struct BlacklistRule {
 
-    for rawLine in blacklistedArray {
+    fileprivate enum Metric { case score, id, width, height, favCount, tagCount }
+
+    fileprivate enum Matcher {
+        case tag(String)
+        case wildcard(NSRegularExpression?)
+        case rating(String)
+        case fileType(String)
+        case metric(Metric, String)
+        case status(String)
+    }
+
+    fileprivate struct Term {
+        let negated: Bool;
+        let matcher: Matcher;
+    }
+
+    let line: String;
+    fileprivate let required: [Term];
+    fileprivate let optional: [Term];
+
+    // Returns nil for blank and comment-only lines, and for lines with nothing
+    // left after stripping `~` / `-` (which would otherwise match every post).
+    init?(_ rawLine: String) {
         // Strip inline comments (space then #)
-        let line: String;
+        var text = rawLine;
         if let commentRange = rawLine.range(of: " #") {
-            line = String(rawLine[rawLine.startIndex..<commentRange.lowerBound]).trimmingCharacters(in: .whitespaces);
-        } else {
-            line = rawLine;
+            text = String(rawLine[rawLine.startIndex..<commentRange.lowerBound]).trimmingCharacters(in: .whitespaces);
         }
-        // Skip comment-only lines
-        if line.isEmpty || line.hasPrefix("#") { continue; }
+        if text.isEmpty || text.hasPrefix("#") { return nil; }
 
-        let rawTokens = line.split(separator: " ").map { String($0) }.filter { !$0.isEmpty };
-        if rawTokens.isEmpty { continue; }
-
-        // Parse tokens into required and optional groups
-        var required: [(value: String, negated: Bool)] = [];
-        var optional: [(value: String, negated: Bool)] = [];
-
-        for raw in rawTokens {
-            var t = raw;
+        var required: [Term] = [];
+        var optional: [Term] = [];
+        for raw in text.split(separator: " ") {
+            var t = String(raw);
             let isOptional = t.hasPrefix("~");
             if isOptional { t = String(t.dropFirst()); }
             let isNegated = t.hasPrefix("-");
             if isNegated { t = String(t.dropFirst()); }
             if t.isEmpty { continue; }
 
-            if isOptional {
-                optional.append((t, isNegated));
-            } else {
-                required.append((t, isNegated));
-            }
+            let term = Term(negated: isNegated, matcher: BlacklistRule.matcher(for: t));
+            if isOptional { optional.append(term); } else { required.append(term); }
         }
-
-        // All required tokens must match (AND logic)
-        var allMatch = true;
-        for req in required {
-            let matches = blacklistTokenMatchesPost(req.value, post: post, tagSet: tagSet);
-            if req.negated ? matches : !matches {
-                allMatch = false;
-                break;
-            }
-        }
-        if !allMatch { continue; }
-
-        // At least one optional token must match (OR logic), if any exist
-        if !optional.isEmpty {
-            var anyMatch = false;
-            for opt in optional {
-                let matches = blacklistTokenMatchesPost(opt.value, post: post, tagSet: tagSet);
-                if opt.negated ? !matches : matches {
-                    anyMatch = true;
-                    break;
-                }
-            }
-            if !anyMatch { continue; }
-        }
-
-        os_log("Post %{public}d blacklisted by: %{public}s", log: .default, post.id, line);
-        return true;
+        if required.isEmpty && optional.isEmpty { return nil; }
+        self.line = text;
+        self.required = required;
+        self.optional = optional;
     }
-    return false;
+
+    private static func matcher(for token: String) -> Matcher {
+        if let colonIdx = token.firstIndex(of: ":") {
+            let prefix = String(token[token.startIndex..<colonIdx]);
+            let value = String(token[token.index(after: colonIdx)...]);
+            switch prefix.lowercased() {
+            case "rating":
+                switch value {
+                case "s", "safe": return .rating("s");
+                case "q", "questionable": return .rating("q");
+                case "e", "explicit": return .rating("e");
+                default: return .rating(value);
+                }
+            case "type": return .fileType(value);
+            case "score": return .metric(.score, value);
+            case "id": return .metric(.id, value);
+            case "width": return .metric(.width, value);
+            case "height": return .metric(.height, value);
+            case "favcount": return .metric(.favCount, value);
+            case "tagcount": return .metric(.tagCount, value);
+            case "status": return .status(value);
+            default:
+                // Unknown metatag prefix: treat the whole token as a tag
+                return .tag(token);
+            }
+        }
+        if token.contains("*") {
+            let pattern = "^" + NSRegularExpression.escapedPattern(for: token)
+                .replacingOccurrences(of: "\\*", with: ".*") + "$";
+            return .wildcard(try? NSRegularExpression(pattern: pattern));
+        }
+        return .tag(token);
+    }
+
+    fileprivate func matches(_ post: PostContent, tagSet: Set<String>) -> Bool {
+        // Every required term must hold (AND); with optional terms, at least one must too (OR)
+        for term in required where !term.isSatisfied(by: post, tagSet: tagSet) { return false; }
+        if optional.isEmpty { return true; }
+        return optional.contains { $0.isSatisfied(by: post, tagSet: tagSet) };
+    }
 }
 
-private func blacklistTokenMatchesPost(_ token: String, post: PostContent, tagSet: Set<String>) -> Bool {
-    // Metatag handling
-    if let colonIdx = token.firstIndex(of: ":") {
-        let prefix = String(token[token.startIndex..<colonIdx]);
-        let value = String(token[token.index(after: colonIdx)...]);
+private extension BlacklistRule.Term {
 
-        switch prefix.lowercased() {
-        case "rating":
-            let normalized: String;
-            switch value {
-            case "s", "safe": normalized = "s";
-            case "q", "questionable": normalized = "q";
-            case "e", "explicit": normalized = "e";
-            default: normalized = value;
+    func isSatisfied(by post: PostContent, tagSet: Set<String>) -> Bool {
+        matcher.matches(post, tagSet: tagSet) != negated;
+    }
+}
+
+private extension BlacklistRule.Matcher {
+
+    func matches(_ post: PostContent, tagSet: Set<String>) -> Bool {
+        switch self {
+        case .tag(let name):
+            return tagSet.contains(name);
+        case .wildcard(let regex):
+            guard let regex else { return false; }
+            return tagSet.contains { tag in
+                regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)) != nil;
+            };
+        case .rating(let rating):
+            return post.rating == rating;
+        case .fileType(let ext):
+            return post.file.ext.lowercased() == ext;
+        case .metric(let metric, let spec):
+            let actual: Int;
+            switch metric {
+            case .score: actual = post.score.total;
+            case .id: actual = post.id;
+            case .width: actual = post.file.width;
+            case .height: actual = post.file.height;
+            case .favCount: actual = post.fav_count;
+            case .tagCount: actual = tagSet.count;
             }
-            return post.rating == normalized;
-        case "type":
-            return post.file.ext.lowercased() == value;
-        case "score":
-            return blacklistCompareValue(post.score.total, against: value);
-        case "id":
-            return blacklistCompareValue(post.id, against: value);
-        case "width":
-            return blacklistCompareValue(post.file.width, against: value);
-        case "height":
-            return blacklistCompareValue(post.file.height, against: value);
-        case "favcount":
-            return blacklistCompareValue(post.fav_count, against: value);
-        case "tagcount":
-            return blacklistCompareValue(tagSet.count, against: value);
-        case "status":
+            return blacklistCompareValue(actual, against: spec);
+        case .status(let value):
             switch value {
             case "pending": return post.flags.pending;
             case "flagged": return post.flags.flagged;
             case "deleted": return post.flags.deleted;
             default: return false;
             }
-        default:
-            // Unknown metatag prefix — fall through to tag matching
-            return tagSet.contains(token);
         }
     }
-
-    // Wildcard matching
-    if token.contains("*") {
-        let pattern = "^" + NSRegularExpression.escapedPattern(for: token)
-            .replacingOccurrences(of: "\\*", with: ".*") + "$";
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false; }
-        for tag in tagSet {
-            if regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)) != nil {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Plain tag
-    return tagSet.contains(token);
 }
 
+func compileBlacklist(_ lines: [String]) -> [BlacklistRule] {
+    lines.compactMap { BlacklistRule($0) };
+}
+
+func isPostBlacklisted(_ post: PostContent, rules: [BlacklistRule]) -> Bool {
+    if rules.isEmpty { return false; }
+    let tagSet = Set(post.tags.all.map { $0.lowercased() });
+    guard let hit = rules.first(where: { $0.matches(post, tagSet: tagSet) }) else { return false; }
+    os_log("Post %{public}d blacklisted by: %{public}s", log: .default, post.id, hit.line);
+    return true;
+}
+
+// "10..50", "..10", "10..", ">=5", "<0", "7"
 private func blacklistCompareValue(_ actual: Int, against spec: String) -> Bool {
-    // Range: "10..50"
     if let dotRange = spec.range(of: "..") {
         let low = Int(spec[spec.startIndex..<dotRange.lowerBound]);
         let high = Int(spec[dotRange.upperBound...]);
-        if let lo = low, let hi = high { return actual >= lo && actual <= hi; }
-        return false;
+        if low == nil && high == nil { return false; }
+        return actual >= (low ?? Int.min) && actual <= (high ?? Int.max);
     }
     if spec.hasPrefix(">=") || spec.hasPrefix("=>") {
         if let v = Int(spec.dropFirst(2)) { return actual >= v; }
@@ -194,6 +218,18 @@ private let queryComponentAllowed: CharacterSet = {
     set.remove(charactersIn: "+&=;#");
     return set;
 }();
+
+// One path segment. `urlPathAllowed` leaves `/` alone, which would split a tag
+// like `male/male` into two segments.
+private let pathSegmentAllowed: CharacterSet = {
+    var set = CharacterSet.urlPathAllowed;
+    set.remove(charactersIn: "/");
+    return set;
+}();
+
+func pathSegment(_ value: String) -> String {
+    value.addingPercentEncoding(withAllowedCharacters: pathSegmentAllowed) ?? value;
+}
 
 // Builds `?a=b&c=d` with every key and value percent-encoded. Pass an ordered
 // list so the query is stable for logging.
@@ -402,16 +438,17 @@ private func postListingPath(tags: String, page: Int, limit: Int) -> String {
     return "/posts.json" + query + "&" + postApiFormat;
 }
 
-private func currentBlacklistLines() -> [String] {
+private func currentBlacklistRules() -> [BlacklistRule] {
     guard UserDefaults.standard.bool(forKey: UDKey.enableBlacklist) else { return []; }
     let raw = UserDefaults.standard.string(forKey: UDKey.userBlacklist) ?? "";
-    return raw.lowercased()
+    let lines = raw.lowercased()
         .split(separator: "\n")
         .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty };
+    return compileBlacklist(lines);
 }
 
-private func fetchPostPage(_ page: Int, _ limit: Int, _ tags: String, blacklist: [String]) async -> PostFetchResult {
+private func fetchPostPage(_ page: Int, _ limit: Int, _ tags: String, blacklist: [BlacklistRule]) async -> PostFetchResult {
     let url = postListingPath(tags: tags, page: page, limit: limit);
     guard let data = await makeRequest(destination: url, method: "GET", body: nil, contentType: "application/json") else {
         return .failure(page: page);
@@ -420,7 +457,7 @@ private func fetchPostPage(_ page: Int, _ limit: Int, _ tags: String, blacklist:
         let parsed = try JSONDecoder().decode([PostContent].self, from: data);
         var posts = parsed.filter { $0.preview.url != nil };
         if !blacklist.isEmpty {
-            posts = posts.filter { !isPostBlacklisted($0, blacklistedArray: blacklist) };
+            posts = posts.filter { !isPostBlacklisted($0, rules: blacklist) };
         }
         return PostFetchResult(posts: posts, hasMore: parsed.count >= limit, page: page, failed: false);
     } catch {
@@ -442,7 +479,7 @@ private let maxEmptyPagesToSkip = 4;
 // `ignoringBlacklist` skips the client-side blacklist (collections keep every
 // page; see showsBlacklistedInCollections()).
 func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String, skipEmptyPages: Bool = true, ignoringBlacklist: Bool = false) async -> PostFetchResult {
-    let blacklist = ignoringBlacklist ? [] : currentBlacklistLines();
+    let blacklist = ignoringBlacklist ? [] : currentBlacklistRules();
     var current = page;
     var skipped = 0;
     while true {
@@ -492,8 +529,7 @@ func votePost(postId: Int, value: Int, no_unvote: Bool) async -> Int? {
 }
 
 func fetchWikiPage(tagName: String) async -> WikiPage? {
-    let encoded = tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tagName;
-    return await fetchJSON("/wiki_pages/\(encoded).json", logLabel: "wiki page for \(tagName)");
+    return await fetchJSON("/wiki_pages/\(pathSegment(tagName)).json", logLabel: "wiki page for \(tagName)");
 }
 
 func fetchTagDetail(tagName: String) async -> TagDetail? {
@@ -546,7 +582,7 @@ func prefetchThumbnails(for posts: [PostContent]) {
 }
 
 func makeRequest(destination: String, method: String, body: Data?, contentType: String) async -> Data? {
-    let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    let domain = apiDomain();
     let API_KEY = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     let username = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
     let AUTH_STRING: String = "\(username):\(API_KEY)".data(using: .utf8)?.base64EncodedString() ?? "";

@@ -263,12 +263,12 @@ struct DTextInlineView: View {
 
         case .wikiLink(let tag, let display):
             var str = AttributedString(display ?? tag.replacingOccurrences(of: "_", with: " "))
-            str.link = URL(string: "tanuki://wiki/\(tag.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tag)")
+            str.link = URL(string: "tanuki://wiki/\(pathSegment(tag))")
             return str
 
         case .searchLink(let query, let display):
             var str = AttributedString(display ?? query.replacingOccurrences(of: "_", with: " "))
-            str.link = URL(string: "tanuki://search/\(query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query)")
+            str.link = URL(string: "tanuki://search/\(pathSegment(query))")
             return str
 
         case .topicRef(let id):

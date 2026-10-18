@@ -12,7 +12,7 @@ struct SettingsView: View {
     
     @Environment(\.dismiss) private var dismiss
     @State private var username: String = UserDefaults.standard.string(forKey: UDKey.username) ?? "";
-    @State private var selection: String = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    @State private var selection: String = apiDomain();
     @State private var API_KEY: String = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);

@@ -13,7 +13,7 @@ struct DTextView: View {
     @Environment(\.openURL) private var parentOpenURL;
     @Environment(\.pushDestination) private var pushDestination;
 
-    private let domain = UserDefaults.standard.string(forKey: UDKey.apiSource) ?? "e926.net";
+    private let domain = apiDomain();
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -31,13 +31,13 @@ struct DTextView: View {
 
             switch url.host {
             case "wiki":
-                if let tag = url.pathComponents.last?.removingPercentEncoding {
+                if let tag = url.pathComponents.last {
                     pushDestination?(TagDestination(name: tag));
                 }
                 return .handled;
 
             case "search":
-                if let query = url.pathComponents.last?.removingPercentEncoding {
+                if let query = url.pathComponents.last {
                     pushDestination?(SearchDestination(query: query));
                 }
                 return .handled;
