@@ -301,5 +301,5 @@ struct PoolContent: Decodable {
     let created_at: String;
     let updated_at: String?;
     let is_active: Bool;
-    let is_deleted: Bool;
+    let is_deleted: Bool?;
 }
