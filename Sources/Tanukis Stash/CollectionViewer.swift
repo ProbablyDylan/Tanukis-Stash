@@ -142,6 +142,10 @@ struct CollectionViewer: View {
                     page(for: post)
                         .id(post.id)
                         .containerRelativeFrame(.horizontal)
+                        // The swipe hint reveals the neighbor, whose sections are
+                        // laid out for the first time under the hint's animation;
+                        // without this they slide in from where they start.
+                        .transaction(value: nudgeOffset) { $0.animation = nil; }
                 }
             }
             .scrollTargetLayout()
