@@ -107,7 +107,6 @@ struct CollectionViewer: View {
         .toolbar { topBarItems }
         .postActionsToolbar(post: currentPost, mutate: mutatePost) {
             PageSelectorPill(
-                title: title,
                 details: collectionDetails,
                 posts: posts,
                 currentId: scrolledId,
@@ -252,10 +251,9 @@ struct CollectionViewer: View {
 }
 
 // The bottom-bar page selector: "13 of 16 ⌃⌄". Tapping it opens a popover with
-// the collection's name and description above a horizontally scrolling strip of
-// numbered thumbnails to skip around.
+// the collection's description (if it has one) above a horizontally scrolling
+// strip of numbered thumbnails to skip around.
 struct PageSelectorPill: View {
-    let title: String;
     let details: String?;
     let posts: [PostContent];
     let currentId: Int?;
@@ -301,7 +299,7 @@ struct PageSelectorPill: View {
                 .accessibilityLabel("Page \(index + 1) of \(total)")
                 .accessibilityHint("Opens the page picker")
                 .popover(isPresented: $expanded) {
-                    PagePopover(title: title, details: details, posts: posts, currentId: currentId) { id in
+                    PagePopover(details: details, posts: posts, currentId: currentId) { id in
                         selectionCount += 1;
                         expanded = false;
                         onSelect(id);
@@ -315,7 +313,6 @@ struct PageSelectorPill: View {
 }
 
 private struct PagePopover: View {
-    let title: String;
     let details: String?;
     let posts: [PostContent];
     let currentId: Int?;
@@ -333,16 +330,11 @@ private struct PagePopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                if let details {
-                    detailsView(details)
-                }
+            if let details {
+                detailsView(details)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
             PageStrip(posts: posts, currentId: currentId, onSelect: onSelect)
         }
         .frame(width: 340)
