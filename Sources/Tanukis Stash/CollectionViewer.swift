@@ -11,6 +11,9 @@ import SwiftUI
 import Kingfisher
 import os.log
 
+// How far the first-run hint pushes the pager toward its neighbor.
+private let kPagerNudgeDistance: CGFloat = 28;
+
 @MainActor
 struct CollectionViewer: View {
     let collections: [PostCollection];
@@ -46,6 +49,10 @@ struct CollectionViewer: View {
     // The collection `posts` was last fully loaded for. Lets .task skip the
     // reload when the viewer reappears after a push/pop.
     @State private var loadedCollection: PostCollection?;
+    // The first-run swipe hint: the pager content leans toward its neighbor.
+    @State private var nudgeOffset: CGFloat = 0;
+    @State private var nudgeTask: Task<Void, Never>?;
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion;
 
     private static func displayName(_ raw: String) -> String {
         raw.replacingOccurrences(of: "_", with: " ");
@@ -138,9 +145,15 @@ struct CollectionViewer: View {
                 }
             }
             .scrollTargetLayout()
+            .offset(x: nudgeOffset)
         }
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $scrolledId)
+        // Touching the pager ends the hint at once; paging takes over from there.
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting { endNudge(animated: true); }
+        }
+        .onDisappear { endNudge(animated: false); }
     }
 
     private func page(for post: PostContent) -> some View {
@@ -232,6 +245,45 @@ struct CollectionViewer: View {
         loadedCollection = result.failed ? nil : target;
         isLoading = false;
         prefetchThumbnails(for: posts);
+        nudgeIfFirstTime();
+    }
+
+    // A one-time hint that the page swipes: the pager leans toward its neighbor
+    // and springs back. Toward the next page, or the previous one when this is
+    // the last; nothing for a single page. Once per install, never under Reduce
+    // Motion, and only once the collection has loaded so there is a neighbor to
+    // lean toward.
+    private func nudgeIfFirstTime() {
+        guard !UserDefaults.standard.bool(forKey: UDKey.pagerNudgeShown),
+              !reduceMotion, !loadFailed, posts.count > 1,
+              let index = currentIndex else { return; }
+        let direction: CGFloat = index + 1 < posts.count ? 1 : -1;
+        UserDefaults.standard.set(true, forKey: UDKey.pagerNudgeShown);
+        nudgeTask?.cancel();
+        nudgeTask = Task { @MainActor in
+            // Let the page settle before it moves.
+            try? await Task.sleep(for: .milliseconds(500));
+            guard !Task.isCancelled else { return; }
+            withAnimation(.easeOut(duration: 0.3)) {
+                nudgeOffset = -direction * kPagerNudgeDistance;
+            }
+            try? await Task.sleep(for: .milliseconds(320));
+            guard !Task.isCancelled else { return; }
+            withAnimation(.spring(duration: 0.5, bounce: 0.25)) {
+                nudgeOffset = 0;
+            }
+        }
+    }
+
+    private func endNudge(animated: Bool) {
+        nudgeTask?.cancel();
+        nudgeTask = nil;
+        guard nudgeOffset != 0 else { return; }
+        if animated {
+            withAnimation(.easeOut(duration: 0.15)) { nudgeOffset = 0; }
+        } else {
+            nudgeOffset = 0;
+        }
     }
 
     private func loadPoolNames() async {

@@ -17,6 +17,7 @@ enum UDKey {
     static let tagCacheLastSync = "TAG_CACHE_LAST_SYNC";
     static let imageCacheSizeLimit = "IMAGE_CACHE_SIZE_LIMIT";
     static let imageCacheExpirationDays = "IMAGE_CACHE_EXPIRATION_DAYS";
+    static let pagerNudgeShown = "PAGER_NUDGE_SHOWN";
 }
 
 enum ImageCacheSizeLimit: Int, CaseIterable, Identifiable {
