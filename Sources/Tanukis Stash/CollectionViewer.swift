@@ -64,9 +64,12 @@ struct CollectionViewer: View {
     private var currentPost: PostContent? {
         currentIndex.map { posts[$0] };
     }
-    private var totalCount: Int {
-        if case .pool = active, let pool { return max(pool.post_count, posts.count); }
-        return posts.count;
+    // Pages in the pool that did not load: the site's rating filter (e926), deleted
+    // posts, or the blacklist when collections honor it. The pill counts only what
+    // can be reached, so this is surfaced separately in the page selector.
+    private var hiddenCount: Int {
+        if case .pool = active, let pool { return max(0, pool.post_count - posts.count); }
+        return 0;
     }
     private var title: String {
         name(for: active);
@@ -112,7 +115,8 @@ struct CollectionViewer: View {
                 details: collectionDetails,
                 posts: posts,
                 currentId: scrolledId,
-                total: totalCount,
+                total: posts.count,
+                hiddenCount: hiddenCount,
                 isLoading: isLoading,
                 loadFailed: loadFailed,
                 onSelect: jump(to:),
@@ -308,6 +312,7 @@ struct PageSelectorPill: View {
     let posts: [PostContent];
     let currentId: Int?;
     let total: Int;
+    let hiddenCount: Int;
     let isLoading: Bool;
     let loadFailed: Bool;
     let onSelect: (Int) -> Void;
@@ -370,7 +375,7 @@ struct PageSelectorPill: View {
         .accessibilityLabel("Page \(position) of \(total)")
         .accessibilityHint("Opens the page picker")
         .popover(isPresented: $expanded) {
-            PagePopover(details: details, posts: posts, currentId: currentId) { id in
+            PagePopover(details: details, hiddenCount: hiddenCount, posts: posts, currentId: currentId) { id in
                 selectionCount += 1;
                 expanded = false;
                 onSelect(id);
@@ -383,6 +388,7 @@ struct PageSelectorPill: View {
 
 private struct PagePopover: View {
     let details: String?;
+    let hiddenCount: Int;
     let posts: [PostContent];
     let currentId: Int?;
     let onSelect: (Int) -> Void;
@@ -412,6 +418,13 @@ private struct PagePopover: View {
                     .padding(.top, 14)
             }
             PageStrip(posts: posts, currentId: currentId, onSelect: onSelect)
+            if hiddenCount > 0 {
+                Label(hiddenCount == 1 ? "1 page hidden" : "\(hiddenCount) pages hidden", systemImage: "eye.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
         }
         .frame(width: width)
     }
