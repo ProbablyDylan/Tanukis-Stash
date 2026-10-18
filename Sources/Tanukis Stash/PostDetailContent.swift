@@ -1,27 +1,5 @@
 import SwiftUI
 
-// Shares one matched-geometry id per post between the pager page and the grid
-// cell so the media zooms between the two layers. `isSource` is true for the
-// layer currently on screen.
-struct MediaMatchedGeometry {
-    let namespace: Namespace.ID;
-    let isSource: Bool;
-}
-
-private struct PostMediaMatchedGeometry: ViewModifier {
-    let postId: Int;
-    let geometry: MediaMatchedGeometry?;
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let geometry {
-            content.matchedGeometryEffect(id: "post_\(postId)", in: geometry.namespace, isSource: geometry.isSource);
-        } else {
-            content;
-        }
-    }
-}
-
 // The post-detail stack shared by PostView and the CollectionViewer's pages.
 // It does not include a ScrollView: the caller owns scrolling so a screen can
 // keep its ScrollView outermost (transparent scroll-edge nav bar).
@@ -32,7 +10,6 @@ struct PostDetailContent: View {
     // PostView shows parent/child/pool cards; the viewer replaces them with
     // its pager and collection switcher.
     var showsRelated: Bool = true;
-    var matchedGeometry: MediaMatchedGeometry? = nil;
 
     @State private var showImageViewer: Bool = false;
     @State private var descExpanded: Bool = true;
@@ -46,7 +23,6 @@ struct PostDetailContent: View {
         VStack {
             GeometryReader { geometry in
                 MediaView(post: post)
-                    .modifier(PostMediaMatchedGeometry(postId: post.id, geometry: matchedGeometry))
                     .gesture(tapGesture)
                     .frame(
                         width: geometry.size.width,

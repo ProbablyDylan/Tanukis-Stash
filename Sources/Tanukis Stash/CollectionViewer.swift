@@ -2,8 +2,9 @@
 //  CollectionViewer.swift
 //  Tanuki
 //
-//  Pager + grid over a post's pool or parent/child family. Entered
-//  automatically from PostEntry; also opened for pool links (PoolDestination).
+//  Pager over a post's pool or parent/child family. Entered automatically from
+//  PostEntry; also opened for pool links (PoolDestination). Skipping around is
+//  the bottom-bar page selector's job (PageSelectorPill).
 //
 
 import SwiftUI
@@ -45,16 +46,11 @@ struct CollectionViewer: View {
     @State private var scrolledId: Int?;
     @State private var pool: PoolContent?;
     @State private var poolNames: [Int: String] = [:];
-    @State private var showGrid = false;
     @State private var isLoading = true;
     @State private var loadFailed = false;
     // The collection `posts` was last fully loaded for. Lets .task skip the
     // reload when the viewer reappears after a push/pop.
     @State private var loadedCollection: PostCollection?;
-    @State private var gridWidth: CGFloat = 0;
-
-    @Namespace private var gridTransition;
-    @Environment(\.isPadRegular) private var isPadRegular;
 
     private static func displayName(_ raw: String) -> String {
         raw.replacingOccurrences(of: "_", with: " ");
@@ -73,6 +69,11 @@ struct CollectionViewer: View {
     private var title: String {
         name(for: active);
     }
+    // Pool-level DText shown in the page selector's header.
+    private var collectionDetails: String? {
+        if case .pool = active, let pool, !pool.description.isEmpty { return pool.description; }
+        return nil;
+    }
 
     private func name(for collection: PostCollection) -> String {
         switch collection {
@@ -86,19 +87,7 @@ struct CollectionViewer: View {
             if posts.isEmpty {
                 emptyState
             } else {
-                ZStack {
-                    carouselView
-                        .environment(\.isMediaPlaybackActive, !showGrid)
-                        .opacity(showGrid ? 0 : 1)
-                        .allowsHitTesting(!showGrid)
-                        .accessibilityHidden(showGrid)
-                        .zIndex(showGrid ? 0 : 1)
-                    gridView
-                        .opacity(showGrid ? 1 : 0)
-                        .allowsHitTesting(showGrid)
-                        .accessibilityHidden(!showGrid)
-                        .zIndex(showGrid ? 1 : 0)
-                }
+                carouselView
             }
         }
         // Picks up vote/favorite totals cast on the same posts in a screen
@@ -116,8 +105,10 @@ struct CollectionViewer: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { topBarItems }
-        .postActionsToolbar(post: currentPost, isVisible: !showGrid, mutate: mutatePost) {
+        .postActionsToolbar(post: currentPost, mutate: mutatePost) {
             PageSelectorPill(
+                title: title,
+                details: collectionDetails,
                 posts: posts,
                 currentId: scrolledId,
                 total: totalCount,
@@ -164,60 +155,9 @@ struct CollectionViewer: View {
                 post: post,
                 search: search,
                 highlightCommentId: post.id == seed?.id ? highlightCommentId : nil,
-                showsRelated: posts.count == 1 && !isLoading,
-                matchedGeometry: MediaMatchedGeometry(namespace: gridTransition, isSource: !showGrid)
+                showsRelated: posts.count == 1 && !isLoading
             )
         }
-    }
-
-    // MARK: - Grid
-
-    private var gridView: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                if case .pool = active, let pool, !pool.description.isEmpty {
-                    DTextView(text: pool.description)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                }
-                // Binding-collection form keys cells by post id, so switching
-                // collections (which shrinks `posts`) can't leave a live cell
-                // holding a stale index.
-                LazyVGrid(columns: postGridColumns(forWidth: gridWidth, isPadRegular: isPadRegular)) {
-                    ForEach($posts, id: \.id) { $post in
-                        Button {
-                            scrolledId = post.id;
-                            withAnimation(.easeInOut(duration: 0.25)) { showGrid = false }
-                        } label: {
-                            gridCell(post: post, isSelected: post.id == scrolledId)
-                        }
-                        .postContextMenu(post: $post)
-                        .id(post.id)
-                    }
-                }
-                .padding(10)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0; }
-            }
-            .refreshable { await load(); }
-            .onAppear {
-                if let scrolledId { proxy.scrollTo(scrolledId, anchor: .center); }
-            }
-            .onChange(of: showGrid) { _, visible in
-                if visible, let scrolledId {
-                    proxy.scrollTo(scrolledId, anchor: .center);
-                }
-            }
-        }
-    }
-
-    private func gridCell(post: PostContent, isSelected: Bool) -> some View {
-        PostGridCell(post: post)
-            .equatable()
-            .matchedGeometryEffect(id: "post_\(post.id)", in: gridTransition, isSource: showGrid)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
-            )
     }
 
     // MARK: - Toolbar
@@ -241,14 +181,6 @@ struct CollectionViewer: View {
                 } label: {
                     Image(systemName: "rectangle.stack")
                 }
-            }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) { showGrid.toggle(); }
-            } label: {
-                Image(systemName: showGrid ? "square.stack" : "square.grid.2x2")
-                    .contentTransition(.symbolEffect(.replace))
             }
         }
     }
@@ -288,9 +220,8 @@ struct CollectionViewer: View {
         let target = active;
         let result = await fetchPostCollection(target, seed: currentPost ?? seed);
         // A load for a collection that is no longer active (switched meanwhile,
-        // including from a Retry or pull-to-refresh that .task(id:) can't
-        // cancel) or that was cancelled must not touch state; the newer load
-        // owns isLoading.
+        // including from a Retry that .task(id:) can't cancel) or that was
+        // cancelled must not touch state; the newer load owns isLoading.
         guard !Task.isCancelled, target == active else { return; }
         if let loaded = result.pool {
             pool = loaded;
@@ -320,9 +251,12 @@ struct CollectionViewer: View {
     }
 }
 
-// The bottom-bar page selector: "13 of 16 ⌃". Tapping it opens a popover with
-// a horizontally scrolling strip of numbered thumbnails to skip around.
+// The bottom-bar page selector: "13 of 16 ⌃⌄". Tapping it opens a popover with
+// the collection's name and description above a horizontally scrolling strip of
+// numbered thumbnails to skip around.
 struct PageSelectorPill: View {
+    let title: String;
+    let details: String?;
     let posts: [PostContent];
     let currentId: Int?;
     let total: Int;
@@ -332,6 +266,7 @@ struct PageSelectorPill: View {
     let onRetry: () -> Void;
 
     @State private var expanded = false;
+    @State private var selectionCount = 0;
 
     private var index: Int? {
         posts.firstIndex { $0.id == currentId };
@@ -355,9 +290,10 @@ struct PageSelectorPill: View {
                         Text("\(index + 1) of \(total)")
                             .monospacedDigit()
                         if posts.count > 1 {
-                            Image(systemName: "chevron.up")
+                            // The pop-up button indicator: the control shows the
+                            // current choice among several.
+                            Image(systemName: "chevron.up.chevron.down")
                                 .font(.caption2.weight(.bold))
-                                .rotationEffect(.degrees(expanded ? 180 : 0))
                         }
                     }
                 }
@@ -365,12 +301,72 @@ struct PageSelectorPill: View {
                 .accessibilityLabel("Page \(index + 1) of \(total)")
                 .accessibilityHint("Opens the page picker")
                 .popover(isPresented: $expanded) {
-                    PageStrip(posts: posts, currentId: currentId) { id in
+                    PagePopover(title: title, details: details, posts: posts, currentId: currentId) { id in
+                        selectionCount += 1;
                         expanded = false;
                         onSelect(id);
                     }
                     .presentationCompactAdaptation(.popover)
                 }
+                .sensoryFeedback(.selection, trigger: selectionCount)
+            }
+        }
+    }
+}
+
+private struct PagePopover: View {
+    let title: String;
+    let details: String?;
+    let posts: [PostContent];
+    let currentId: Int?;
+    let onSelect: (Int) -> Void;
+
+    @State private var detailsExpanded = false;
+    @State private var detailsHeight: CGFloat = 0;
+
+    private let collapsedDetailsHeight: CGFloat = 60;
+    private let expandedDetailsHeight: CGFloat = 200;
+
+    private var detailsIsTruncated: Bool {
+        detailsHeight > collapsedDetailsHeight;
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                if let details {
+                    detailsView(details)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            PageStrip(posts: posts, currentId: currentId, onSelect: onSelect)
+        }
+        .frame(width: 340)
+    }
+
+    // The description is clamped to a few lines; "More" reveals the rest in a
+    // short scroll. The natural height is measured inside the scroll view.
+    private func detailsView(_ text: String) -> some View {
+        let limit = detailsExpanded ? expandedDetailsHeight : collapsedDetailsHeight;
+        let height = detailsHeight > 0 ? min(detailsHeight, limit) : limit;
+        return VStack(alignment: .leading, spacing: 2) {
+            ScrollView(.vertical, showsIndicators: detailsExpanded) {
+                DTextView(text: text)
+                    .font(.footnote)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailsHeight = $0; }
+            }
+            .scrollDisabled(!detailsExpanded)
+            .frame(height: height)
+            if detailsIsTruncated {
+                Button(detailsExpanded ? "Less" : "More") {
+                    withAnimation(.snappy) { detailsExpanded.toggle(); }
+                }
+                .font(.caption.weight(.semibold))
             }
         }
     }
@@ -384,7 +380,7 @@ private struct PageStrip: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 8) {
+                LazyHStack(spacing: 10) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { offset, post in
                         Button {
                             onSelect(post.id);
@@ -402,19 +398,19 @@ private struct PageStrip: View {
                 if let currentId { proxy.scrollTo(currentId, anchor: .center); }
             }
         }
-        .frame(width: 300, height: 118)
+        .frame(height: 160)
     }
 
     private func thumbnail(_ post: PostContent, number: Int, isCurrent: Bool) -> some View {
         KFImage(URL(string: post.preview.url ?? ""))
             .resizable()
             .scaledToFill()
-            .frame(width: 64, height: 86)
+            .frame(width: 92, height: 124)
             .background(Color.secondary.opacity(0.15))
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(alignment: .bottomTrailing) {
                 Text("\(number)")
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5)

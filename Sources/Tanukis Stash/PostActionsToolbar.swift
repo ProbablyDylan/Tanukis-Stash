@@ -13,7 +13,6 @@ typealias PostMutator = @MainActor (_ postId: Int, _ change: (inout PostContent)
 @MainActor
 struct PostActionsToolbar<Center: View>: ViewModifier {
     let post: PostContent?;
-    var isVisible: Bool = true;
     // PostView disables voting until it has re-fetched the post's current vote.
     var votingEnabled: Bool = true;
     let mutate: PostMutator;
@@ -32,7 +31,7 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar {
-                if isVisible, let post {
+                if let post {
                     toolbarItems(for: post);
                 }
             }
@@ -158,11 +157,11 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
 }
 
 extension View {
-    func postActionsToolbar(post: PostContent?, isVisible: Bool = true, votingEnabled: Bool = true, mutate: @escaping PostMutator) -> some View {
-        modifier(PostActionsToolbar(post: post, isVisible: isVisible, votingEnabled: votingEnabled, mutate: mutate, hasCenter: false, center: EmptyView()))
+    func postActionsToolbar(post: PostContent?, votingEnabled: Bool = true, mutate: @escaping PostMutator) -> some View {
+        modifier(PostActionsToolbar(post: post, votingEnabled: votingEnabled, mutate: mutate, hasCenter: false, center: EmptyView()))
     }
 
-    func postActionsToolbar<Center: View>(post: PostContent?, isVisible: Bool = true, votingEnabled: Bool = true, mutate: @escaping PostMutator, @ViewBuilder center: () -> Center) -> some View {
-        modifier(PostActionsToolbar(post: post, isVisible: isVisible, votingEnabled: votingEnabled, mutate: mutate, hasCenter: true, center: center()))
+    func postActionsToolbar<Center: View>(post: PostContent?, votingEnabled: Bool = true, mutate: @escaping PostMutator, @ViewBuilder center: () -> Center) -> some View {
+        modifier(PostActionsToolbar(post: post, votingEnabled: votingEnabled, mutate: mutate, hasCenter: true, center: center()))
     }
 }
