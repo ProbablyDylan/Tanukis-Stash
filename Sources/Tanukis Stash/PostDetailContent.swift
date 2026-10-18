@@ -33,8 +33,6 @@ struct PostDetailContent: View {
     // its pager and collection switcher.
     var showsRelated: Bool = true;
     var matchedGeometry: MediaMatchedGeometry? = nil;
-    // Room for an overlay (the viewer's position capsule) below the content.
-    var bottomInset: CGFloat = 0;
 
     @State private var showImageViewer: Bool = false;
     @State private var descExpanded: Bool = true;
@@ -83,9 +81,6 @@ struct PostDetailContent: View {
             InfoView(post: post, search: search)
                 .padding(10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if bottomInset > 0 {
-                Spacer().frame(height: bottomInset)
-            }
         }
         .frame(maxWidth: isPadRegular ? 760 : .infinity)
         .frame(maxWidth: .infinity)

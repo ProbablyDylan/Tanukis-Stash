@@ -86,7 +86,7 @@ struct CollectionViewer: View {
             if posts.isEmpty {
                 emptyState
             } else {
-                ZStack(alignment: .bottom) {
+                ZStack {
                     carouselView
                         .environment(\.isMediaPlaybackActive, !showGrid)
                         .opacity(showGrid ? 0 : 1)
@@ -98,10 +98,6 @@ struct CollectionViewer: View {
                         .allowsHitTesting(showGrid)
                         .accessibilityHidden(!showGrid)
                         .zIndex(showGrid ? 1 : 0)
-                    if !showGrid {
-                        positionIndicator
-                            .zIndex(2)
-                    }
                 }
             }
         }
@@ -120,7 +116,17 @@ struct CollectionViewer: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { topBarItems }
-        .postActionsToolbar(post: currentPost, isVisible: !showGrid, mutate: mutatePost)
+        .postActionsToolbar(post: currentPost, isVisible: !showGrid, mutate: mutatePost) {
+            PageSelectorPill(
+                posts: posts,
+                currentId: scrolledId,
+                total: totalCount,
+                isLoading: isLoading,
+                loadFailed: loadFailed,
+                onSelect: jump(to:),
+                onRetry: { Task { await load(); } }
+            )
+        }
     }
 
     @ViewBuilder
@@ -159,8 +165,7 @@ struct CollectionViewer: View {
                 search: search,
                 highlightCommentId: post.id == seed?.id ? highlightCommentId : nil,
                 showsRelated: posts.count == 1 && !isLoading,
-                matchedGeometry: MediaMatchedGeometry(namespace: gridTransition, isSource: !showGrid),
-                bottomInset: 60
+                matchedGeometry: MediaMatchedGeometry(namespace: gridTransition, isSource: !showGrid)
             )
         }
     }
@@ -215,36 +220,6 @@ struct CollectionViewer: View {
             )
     }
 
-    // MARK: - Position indicator
-
-    private var positionIndicator: some View {
-        Group {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            } else if loadFailed {
-                Button {
-                    Task { await load(); }
-                } label: {
-                    Label("\(posts.count) / \(totalCount) · Retry", systemImage: "arrow.clockwise")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                }
-                .buttonStyle(.plain)
-            } else if let index = currentIndex {
-                Text("\(index + 1) / \(totalCount)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .padding(.bottom, 8)
-    }
-
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
@@ -270,7 +245,7 @@ struct CollectionViewer: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Button {
-                showGrid.toggle();
+                withAnimation(.easeInOut(duration: 0.25)) { showGrid.toggle(); }
             } label: {
                 Image(systemName: showGrid ? "square.stack" : "square.grid.2x2")
                     .contentTransition(.symbolEffect(.replace))
@@ -279,6 +254,10 @@ struct CollectionViewer: View {
     }
 
     // MARK: - Data
+
+    private func jump(to postId: Int) {
+        withAnimation(.easeInOut(duration: 0.3)) { scrolledId = postId; }
+    }
 
     private func mutatePost(_ postId: Int, _ change: (inout PostContent) -> Void) {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return; }
@@ -338,5 +317,114 @@ struct CollectionViewer: View {
                 poolNames[id] = Self.displayName(fetched.name);
             }
         }
+    }
+}
+
+// The bottom-bar page selector: "13 of 16 ⌃". Tapping it opens a popover with
+// a horizontally scrolling strip of numbered thumbnails to skip around.
+struct PageSelectorPill: View {
+    let posts: [PostContent];
+    let currentId: Int?;
+    let total: Int;
+    let isLoading: Bool;
+    let loadFailed: Bool;
+    let onSelect: (Int) -> Void;
+    let onRetry: () -> Void;
+
+    @State private var expanded = false;
+
+    private var index: Int? {
+        posts.firstIndex { $0.id == currentId };
+    }
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(minWidth: 44)
+            } else if loadFailed {
+                Button(action: onRetry) {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+            } else if let index {
+                Button {
+                    expanded.toggle();
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("\(index + 1) of \(total)")
+                            .monospacedDigit()
+                        if posts.count > 1 {
+                            Image(systemName: "chevron.up")
+                                .font(.caption2.weight(.bold))
+                                .rotationEffect(.degrees(expanded ? 180 : 0))
+                        }
+                    }
+                }
+                .disabled(posts.count <= 1)
+                .accessibilityLabel("Page \(index + 1) of \(total)")
+                .accessibilityHint("Opens the page picker")
+                .popover(isPresented: $expanded) {
+                    PageStrip(posts: posts, currentId: currentId) { id in
+                        expanded = false;
+                        onSelect(id);
+                    }
+                    .presentationCompactAdaptation(.popover)
+                }
+            }
+        }
+    }
+}
+
+private struct PageStrip: View {
+    let posts: [PostContent];
+    let currentId: Int?;
+    let onSelect: (Int) -> Void;
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(Array(posts.enumerated()), id: \.element.id) { offset, post in
+                        Button {
+                            onSelect(post.id);
+                        } label: {
+                            thumbnail(post, number: offset + 1, isCurrent: post.id == currentId)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Page \(offset + 1)")
+                        .id(post.id)
+                    }
+                }
+                .padding(12)
+            }
+            .onAppear {
+                if let currentId { proxy.scrollTo(currentId, anchor: .center); }
+            }
+        }
+        .frame(width: 300, height: 118)
+    }
+
+    private func thumbnail(_ post: PostContent, number: Int, isCurrent: Bool) -> some View {
+        KFImage(URL(string: post.preview.url ?? ""))
+            .resizable()
+            .scaledToFill()
+            .frame(width: 64, height: 86)
+            .background(Color.secondary.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .bottomTrailing) {
+                Text("\(number)")
+                    .font(.caption2.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .padding(4)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isCurrent ? Color.accentColor : Color.clear, lineWidth: 3)
+            )
     }
 }

@@ -8,13 +8,17 @@ typealias PostMutator = @MainActor (_ postId: Int, _ change: (inout PostContent)
 
 // Bottom-bar actions (favorite, vote, save/share) for one post. Shared by
 // PostView and the CollectionViewer; icon state reads straight from `post`.
+// `center` is an optional item between the actions and the share menu (the
+// viewer's page selector); PostView passes none.
 @MainActor
-struct PostActionsToolbar: ViewModifier {
+struct PostActionsToolbar<Center: View>: ViewModifier {
     let post: PostContent?;
     var isVisible: Bool = true;
     // PostView disables voting until it has re-fetched the post's current vote.
     var votingEnabled: Bool = true;
     let mutate: PostMutator;
+    let hasCenter: Bool;
+    let center: Center;
 
     // Not @AppStorage: on iOS 27 an @AppStorage inside a view reachable from a
     // grid cell's NavigationLink destination hangs the render loop. Seeded from
@@ -61,6 +65,12 @@ struct PostActionsToolbar: ViewModifier {
             }
         }
         ToolbarSpacer(.flexible, placement: .bottomBar)
+        if hasCenter {
+            ToolbarItem(placement: .bottomBar) {
+                center
+            }
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+        }
         ToolbarItemGroup(placement: .bottomBar) {
             shareMenu(post)
         }
@@ -149,6 +159,10 @@ struct PostActionsToolbar: ViewModifier {
 
 extension View {
     func postActionsToolbar(post: PostContent?, isVisible: Bool = true, votingEnabled: Bool = true, mutate: @escaping PostMutator) -> some View {
-        modifier(PostActionsToolbar(post: post, isVisible: isVisible, votingEnabled: votingEnabled, mutate: mutate))
+        modifier(PostActionsToolbar(post: post, isVisible: isVisible, votingEnabled: votingEnabled, mutate: mutate, hasCenter: false, center: EmptyView()))
+    }
+
+    func postActionsToolbar<Center: View>(post: PostContent?, isVisible: Bool = true, votingEnabled: Bool = true, mutate: @escaping PostMutator, @ViewBuilder center: () -> Center) -> some View {
+        modifier(PostActionsToolbar(post: post, isVisible: isVisible, votingEnabled: votingEnabled, mutate: mutate, hasCenter: true, center: center()))
     }
 }
