@@ -438,8 +438,11 @@ private let maxEmptyPagesToSkip = 4;
 // walking forward would be wasted requests. When the skip budget runs out the
 // result is `posts: []` with `hasMore: true`; callers must offer a way to
 // continue from `result.page + 1` rather than treat it as the end.
-func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String, skipEmptyPages: Bool = true) async -> PostFetchResult {
-    let blacklist = currentBlacklistLines();
+//
+// `ignoringBlacklist` skips the client-side blacklist (collections keep every
+// page; see showsBlacklistedInCollections()).
+func fetchRecentPosts(_ page: Int, _ limit: Int, _ tags: String, skipEmptyPages: Bool = true, ignoringBlacklist: Bool = false) async -> PostFetchResult {
+    let blacklist = ignoringBlacklist ? [] : currentBlacklistLines();
     var current = page;
     var skipped = 0;
     while true {

@@ -111,12 +111,13 @@ struct PostCollectionLoad {
 // All pages of one listing query, de-duplicated. `failed` when a page failed
 // (what loaded before it is kept).
 private func fetchAllPages(_ tags: String) async -> (posts: [PostContent], failed: Bool) {
+    let ignoringBlacklist = showsBlacklistedInCollections();
     var all: [PostContent] = [];
     var seen = Set<Int>();
     var page = 1;
     while page <= kCollectionMaxPages {
         if Task.isCancelled { break; }
-        let result = await fetchRecentPosts(page, kCollectionPageSize, tags);
+        let result = await fetchRecentPosts(page, kCollectionPageSize, tags, ignoringBlacklist: ignoringBlacklist);
         if result.failed { return (all, true); }
         for post in result.posts where seen.insert(post.id).inserted {
             all.append(post);

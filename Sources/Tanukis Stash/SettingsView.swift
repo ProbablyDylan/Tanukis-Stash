@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var API_KEY: String = UserDefaults.standard.string(forKey: UDKey.apiKey) ?? "";
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
+    @State private var SHOW_BLACKLISTED_IN_COLLECTIONS: Bool = showsBlacklistedInCollections();
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: UDKey.userIcon) ?? "";
     @State private var showingBlacklistEditor: Bool = false;
@@ -73,7 +74,11 @@ struct SettingsView: View {
                 }
 
                 if (AUTHENTICATED) {
-                    Section(header: Text("Blacklist")) {
+                    Section(header: Text("Blacklist"), footer: Group {
+                        if ENABLE_BLACKLIST {
+                            Text("Pools and related posts keep blacklisted pages so comics and series stay complete.")
+                        }
+                    }) {
                         Toggle("Enable Blacklist", isOn: $ENABLE_BLACKLIST)
                             .toggleStyle(.switch)
                             .onChange(of: ENABLE_BLACKLIST) {
@@ -90,6 +95,11 @@ struct SettingsView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+                            Toggle("Show Blacklisted Posts in Collections", isOn: $SHOW_BLACKLISTED_IN_COLLECTIONS)
+                                .toggleStyle(.switch)
+                                .onChange(of: SHOW_BLACKLISTED_IN_COLLECTIONS) {
+                                    UserDefaults.standard.set(SHOW_BLACKLISTED_IN_COLLECTIONS, forKey: UDKey.showBlacklistedInCollections);
+                                }
                         }
                     }
                 }

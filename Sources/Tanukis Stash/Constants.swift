@@ -18,6 +18,13 @@ enum UDKey {
     static let imageCacheSizeLimit = "IMAGE_CACHE_SIZE_LIMIT";
     static let imageCacheExpirationDays = "IMAGE_CACHE_EXPIRATION_DAYS";
     static let pagerNudgeShown = "PAGER_NUDGE_SHOWN";
+    static let showBlacklistedInCollections = "SHOW_BLACKLISTED_IN_COLLECTIONS";
+}
+
+// Pools and related posts keep blacklisted pages by default: a comic with a page
+// missing is worse than one page you'd rather not see. Unset means on.
+func showsBlacklistedInCollections() -> Bool {
+    UserDefaults.standard.object(forKey: UDKey.showBlacklistedInCollections) as? Bool ?? true;
 }
 
 enum ImageCacheSizeLimit: Int, CaseIterable, Identifiable {
