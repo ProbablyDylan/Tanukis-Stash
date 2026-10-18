@@ -266,49 +266,68 @@ struct PageSelectorPill: View {
     @State private var expanded = false;
     @State private var selectionCount = 0;
 
+    private enum Phase { case loading, failed, ready }
+
+    private var phase: Phase {
+        isLoading ? .loading : (loadFailed ? .failed : .ready);
+    }
+
     private var index: Int? {
         posts.firstIndex { $0.id == currentId };
     }
 
+    // All three states stay in the view and cross-fade by opacity. A toolbar
+    // item is hosted separately from the screen, and swapping views in and out
+    // of it (if/else + transitions) snapped instead of animating. Keeping them
+    // all present also holds the capsule at one size while it loads.
     var body: some View {
-        Group {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(minWidth: 44)
-            } else if loadFailed {
-                Button(action: onRetry) {
-                    Label("Retry", systemImage: "arrow.clockwise")
+        ZStack {
+            ProgressView()
+                .controlSize(.small)
+                .opacity(phase == .loading ? 1 : 0)
+                .accessibilityHidden(phase != .loading)
+            Button(action: onRetry) {
+                Label("Retry", systemImage: "arrow.clockwise")
+            }
+            .opacity(phase == .failed ? 1 : 0)
+            .allowsHitTesting(phase == .failed)
+            .accessibilityHidden(phase != .failed)
+            countButton
+                .opacity(phase == .ready ? 1 : 0)
+                .allowsHitTesting(phase == .ready)
+                .accessibilityHidden(phase != .ready)
+        }
+        .animation(.smooth(duration: 0.3), value: phase)
+    }
+
+    private var countButton: some View {
+        let position = (index ?? 0) + 1;
+        return Button {
+            expanded.toggle();
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(position) of \(total)")
+                    .monospacedDigit()
+                if posts.count > 1 {
+                    // The pop-up button indicator: the control shows the
+                    // current choice among several.
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.bold))
                 }
-            } else if let index {
-                Button {
-                    expanded.toggle();
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("\(index + 1) of \(total)")
-                            .monospacedDigit()
-                        if posts.count > 1 {
-                            // The pop-up button indicator: the control shows the
-                            // current choice among several.
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption2.weight(.bold))
-                        }
-                    }
-                }
-                .disabled(posts.count <= 1)
-                .accessibilityLabel("Page \(index + 1) of \(total)")
-                .accessibilityHint("Opens the page picker")
-                .popover(isPresented: $expanded) {
-                    PagePopover(details: details, posts: posts, currentId: currentId) { id in
-                        selectionCount += 1;
-                        expanded = false;
-                        onSelect(id);
-                    }
-                    .presentationCompactAdaptation(.popover)
-                }
-                .sensoryFeedback(.selection, trigger: selectionCount)
             }
         }
+        .disabled(posts.count <= 1)
+        .accessibilityLabel("Page \(position) of \(total)")
+        .accessibilityHint("Opens the page picker")
+        .popover(isPresented: $expanded) {
+            PagePopover(details: details, posts: posts, currentId: currentId) { id in
+                selectionCount += 1;
+                expanded = false;
+                onSelect(id);
+            }
+            .presentationCompactAdaptation(.popover)
+        }
+        .sensoryFeedback(.selection, trigger: selectionCount)
     }
 }
 
