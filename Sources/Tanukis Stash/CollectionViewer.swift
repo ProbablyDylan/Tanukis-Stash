@@ -129,7 +129,7 @@ struct CollectionViewer: View {
     // MARK: - Carousel
 
     private var carouselView: some View {
-        ScrollView(.horizontal) {
+        ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 0) {
                 ForEach(posts, id: \.id) { post in
                     page(for: post)
