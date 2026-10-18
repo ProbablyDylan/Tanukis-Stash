@@ -56,16 +56,38 @@ struct PoolDestination: Hashable {
 struct FavoritesDestination: Hashable {
 }
 
+// The one place that decides how a post opens: posts in a pool or with a
+// parent/children open the collection viewer on that post; plain posts open
+// PostView. Pages inside the viewer are never routed through here.
+struct PostEntry: View {
+    let dest: PostDestination;
+
+    var body: some View {
+        let collections = PostCollection.collections(for: dest.post);
+        if let primary = collections.first {
+            CollectionViewer(
+                primary: primary,
+                others: Array(collections.dropFirst()),
+                seed: dest.post,
+                search: dest.search,
+                highlightCommentId: dest.highlightCommentId
+            )
+        } else {
+            PostView(post: dest.post, search: dest.search, highlightCommentId: dest.highlightCommentId)
+        }
+    }
+}
+
 // One registration point per NavigationStack. Attach to the stack's root
 // content view — registering inside lazy containers breaks the links.
 struct AppNavigationDestinations: ViewModifier {
     func body(content: Content) -> some View {
         content
             .navigationDestination(for: PostDestination.self) { dest in
-                PostView(post: dest.post, search: dest.search, highlightCommentId: dest.highlightCommentId)
+                PostEntry(dest: dest)
             }
             .navigationDestination(for: PoolDestination.self) { dest in
-                PoolView(poolId: dest.poolId, pool: dest.pool)
+                CollectionViewer(primary: .pool(dest.poolId), pool: dest.pool)
             }
             .navigationDestination(for: TagDestination.self) { dest in
                 TagView(tagName: dest.name)
