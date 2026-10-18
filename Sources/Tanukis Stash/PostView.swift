@@ -11,14 +11,14 @@ import os.log
 
 @MainActor
 struct PostView: View {
-    @State private var showImageViewer: Bool = false;
     // @State (not `let`) so a vote or favorite writes straight back into the
-    // score/fav_count PostMetadataBar reads, instead of only the local
-    // favorited/our_score toggles used for the toolbar icons.
+    // score/fav_count PostMetadataBar reads.
     @State private var post: PostContent;
     let search: String;
     var highlightCommentId: Int? = nil;
-    @State var url: String = "";
+    // The toolbar's vote buttons stay disabled until the post's current vote
+    // has been re-fetched (the post handed to us may be stale).
+    @State private var score_valid: Bool = false;
 
     init(post: PostContent, search: String, highlightCommentId: Int? = nil) {
         _post = State(initialValue: post);
@@ -34,164 +34,22 @@ struct PostView: View {
         pendingPostStatsUpdate(for: post.id) ?? post;
     }
 
-    @State private var displayToastType: MediaActionState = .idle;
-    @State private var favorited: Bool = false;
-    @State private var our_score: Int = 2;
-    @State private var score_valid: Bool = false;
-    // Not @AppStorage: on iOS 27 (beta 1), @AppStorage inside a view that grid cells
-    // eagerly create as a NavigationLink destination re-dirties the view graph every
-    // update pass, hanging the main thread at 100% CPU on push. Plain @State seeded
-    // from UserDefaults (refreshed in onAppear) avoids the loop.
-    @State private var AUTHENTICATED: Bool = UserDefaults.standard.bool(forKey: UDKey.authenticated);
-    @State private var descExpanded: Bool = true;
-    @State private var shareItems: [Any] = [];
-    @State private var showShareSheet = false;
-    @State private var preparingShare = false;
-    @Environment(\.isPadRegular) private var isPadRegular;
-
-    private var tapGesture: some Gesture {
-        !["webm", "mp4"].contains(String(post.file.ext)) ? (TapGesture().onEnded { showImageViewer = true }) : nil
-    }
-
     var body: some View {
         ScrollView(.vertical) {
-            VStack {
-                GeometryReader { geometry in
-                    MediaView(post: post).gesture(tapGesture)
-                        .frame(
-                            width: geometry.size.width,
-                            height: calculateImageHeight(geometry: geometry)
-                        )
-                }
-                .aspectRatio(CGFloat(post.file.width) / CGFloat(post.file.height), contentMode: .fit)
-                    PostMetadataBar(post: displayPost)
-                    RelatedPostsView(post: post, search: search)
-                        .padding(10)
-                    if !post.description.isEmpty {
-                        DisclosureGroup(isExpanded: $descExpanded) {
-                            DTextView(text: post.description)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } label: {
-                            Text("Description")
-                                .font(.title3)
-                                .fontWeight(.heavy)
-                                .foregroundColor(Color.primary)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    if post.comment_count > 0 {
-                        CommentsView(post: post, highlightCommentId: highlightCommentId)
-                            .padding(10)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    InfoView(post: post, search: search)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: isPadRegular ? 760 : .infinity)
-                .frame(maxWidth: .infinity)
-            }
-            .navigationBarTitle("Post", displayMode: .inline)
-            .sheet(isPresented: $showImageViewer) {
-                FullscreenImageViewer(post: post)
-            }
-            .sheet(isPresented: $showShareSheet) {
-                ActivityView(activityItems: shareItems)
-            }
-            .toolbar {
-                if AUTHENTICATED {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button {
-                            let wasFavorited = favorited;
-                            favorited = !wasFavorited;
-                            Task {
-                                let success = wasFavorited
-                                    ? await unFavoritePost(postId: post.id)
-                                    : await favoritePost(postId: post.id);
-                                guard success else { favorited = wasFavorited; return; }
-                                post.is_favorited = !wasFavorited;
-                                await refreshPostStats();
-                                recordPostStatsUpdate(post);
-                            }
-                        } label: {
-                            Image(systemName: favorited ? "heart.fill" : "heart")
-                                .imageScale(.large)
-                                .contentTransition(.symbolEffect(.replace))
-                                .symbolEffect(.bounce, value: favorited)
-                        }
-                    }
-                    ToolbarSpacer(.fixed, placement: .bottomBar)
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button {
-                            Task {
-                                guard let ourScore = await votePost(postId: post.id, value: 1, no_unvote: false) else { return; }
-                                our_score = ourScore;
-                                post.vote = ourScore;
-                                await refreshPostStats();
-                                recordPostStatsUpdate(post);
-                            }
-                        } label: {
-                            Image(systemName: our_score == 1 ? "arrowshape.up.fill" : "arrowshape.up")
-                                .imageScale(.large)
-                                .contentTransition(.symbolEffect(.replace))
-                                .symbolEffect(.bounce, value: our_score)
-                        }
-                        .disabled(!score_valid)
-                        Button {
-                            Task {
-                                guard let ourScore = await votePost(postId: post.id, value: -1, no_unvote: false) else { return; }
-                                our_score = ourScore;
-                                post.vote = ourScore;
-                                await refreshPostStats();
-                                recordPostStatsUpdate(post);
-                            }
-                        } label: {
-                            Image(systemName: our_score == -1 ? "arrowshape.down.fill" : "arrowshape.down")
-                                .imageScale(.large)
-                                .contentTransition(.symbolEffect(.replace))
-                                .symbolEffect(.bounce, value: our_score)
-                        }
-                        .disabled(!score_valid)
-                    }
-                }
-                ToolbarSpacer(.flexible, placement: .bottomBar)
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            saveFile(post: post, showToast: $displayToastType);
-                        } label: {
-                            Label("Save to Photos", systemImage: "square.and.arrow.down")
-                        }
-                        Button {
-                            prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType, includeLink: true)
-                        } label: {
-                            Label("Share Link", systemImage: "link")
-                        }
-                        Button {
-                            prepareAndShareContent(post: post, preparingShare: $preparingShare, shareItems: $shareItems, showShareSheet: $showShareSheet, displayToastType: $displayToastType)
-                        } label: {
-                            Label("Share Content", systemImage: "photo")
-                        }
-                    } label: {
-                        MediaActionMenuLabel(state: displayToastType, preparingShare: preparingShare)
-                    }
-                    .disabled(displayToastType == .inProgress || preparingShare)
-                }
-            }
-            .postToast(displayToastType: $displayToastType)
-            .onAppear {
-                favorited = post.is_favorited;
-                AUTHENTICATED = UserDefaults.standard.bool(forKey: UDKey.authenticated);
-            }
-            .task {
-                await fetchCurrentPostState();
-            }
+            PostDetailContent(post: displayPost, search: search, highlightCommentId: highlightCommentId)
+        }
+        .navigationBarTitle("Post", displayMode: .inline)
+        // `post`, not `displayPost`: the toolbar icons must reflect an action
+        // the instant it lands, before its stats are recorded.
+        .postActionsToolbar(post: post, votingEnabled: score_valid, mutate: mutatePost)
+        .task {
+            await fetchCurrentPostState();
+        }
     }
 
-    func calculateImageHeight(geometry: GeometryProxy) -> CGFloat {
-        return CGFloat(CGFloat(post.file.height) * (CGFloat(geometry.size.width) / CGFloat(post.file.width)))
+    private func mutatePost(_ postId: Int, _ change: (inout PostContent) -> Void) {
+        guard post.id == postId else { return; }
+        change(&post);
     }
 
     // The post handed to this view may have been fetched a while ago, so the
@@ -199,21 +57,7 @@ struct PostView: View {
     func fetchCurrentPostState() async {
         guard let current = await getPost(postId: post.id) else { return; }
         post = current;
-        favorited = current.is_favorited;
-        our_score = current.vote;
         score_valid = true;
-    }
-
-    // The vote/favorite endpoints don't reliably echo the post's new totals,
-    // so after a successful action we ask the server for the real numbers
-    // instead of guessing a delta client-side.
-    func refreshPostStats() async {
-        guard let current = await getPost(postId: post.id) else {
-            os_log("refreshPostStats: getPost returned nil for post %{public}d", log: .default, post.id);
-            return;
-        }
-        post.score = current.score;
-        post.fav_count = current.fav_count;
     }
 
 }
