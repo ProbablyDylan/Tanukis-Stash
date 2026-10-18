@@ -48,6 +48,9 @@ struct CollectionViewer: View {
     @State private var showGrid = false;
     @State private var isLoading = true;
     @State private var loadFailed = false;
+    // The collection `posts` was last fully loaded for. Lets .task skip the
+    // reload when the viewer reappears after a push/pop.
+    @State private var loadedCollection: PostCollection?;
     @State private var gridWidth: CGFloat = 0;
 
     @Namespace private var gridTransition;
@@ -85,10 +88,15 @@ struct CollectionViewer: View {
             } else {
                 ZStack(alignment: .bottom) {
                     carouselView
+                        .environment(\.isMediaPlaybackActive, !showGrid)
                         .opacity(showGrid ? 0 : 1)
+                        .allowsHitTesting(!showGrid)
+                        .accessibilityHidden(showGrid)
                         .zIndex(showGrid ? 0 : 1)
                     gridView
                         .opacity(showGrid ? 1 : 0)
+                        .allowsHitTesting(showGrid)
+                        .accessibilityHidden(!showGrid)
                         .zIndex(showGrid ? 1 : 0)
                     if !showGrid {
                         positionIndicator
@@ -97,12 +105,17 @@ struct CollectionViewer: View {
                 }
             }
         }
-        // Picks up vote/favorite totals cast in a pushed PostView, which can't
-        // write back here directly — see PostStatsSync.swift.
-        .onAppear { applyPendingPostStatsUpdates(to: &posts); }
-        // Reloads whenever the active collection changes; the previous load
-        // is cancelled, so a stale collection can never overwrite a newer one.
-        .task(id: active) { await load(); }
+        // Picks up vote/favorite totals cast on the same posts in a screen
+        // pushed from here — see PostStatsSync.swift. Non-consuming: the entries
+        // are also owned by the grid behind this viewer, which consumes them.
+        .onAppear { overlayPendingPostStats(); }
+        // Loads on first appearance and whenever the active collection changes
+        // (the previous load is cancelled). Reappearing after a push/pop keeps
+        // what is already loaded; a failed or interrupted load tries again.
+        .task(id: active) {
+            guard loadedCollection != active || loadFailed else { return; }
+            await load();
+        }
         .task { await loadPoolNames(); }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -145,7 +158,7 @@ struct CollectionViewer: View {
                 post: post,
                 search: search,
                 highlightCommentId: post.id == seed?.id ? highlightCommentId : nil,
-                showsRelated: false,
+                showsRelated: posts.count == 1 && !isLoading,
                 matchedGeometry: MediaMatchedGeometry(namespace: gridTransition, isSource: !showGrid),
                 bottomInset: 60
             )
@@ -272,6 +285,14 @@ struct CollectionViewer: View {
         change(&posts[index]);
     }
 
+    private func overlayPendingPostStats() {
+        for index in posts.indices {
+            if let recorded = pendingPostStatsUpdate(for: posts[index].id), recorded != posts[index] {
+                posts[index] = recorded;
+            }
+        }
+    }
+
     // Keeps the current post as the lone page while the new collection loads,
     // so the user never sees the previous collection's posts under a new title.
     private func switchTo(_ collection: PostCollection) {
@@ -285,9 +306,13 @@ struct CollectionViewer: View {
     private func load() async {
         isLoading = true;
         loadFailed = false;
-        let result = await fetchPostCollection(active, seed: currentPost ?? seed);
-        // A cancelled load (collection switched, view gone) must not touch state.
-        guard !Task.isCancelled else { return; }
+        let target = active;
+        let result = await fetchPostCollection(target, seed: currentPost ?? seed);
+        // A load for a collection that is no longer active (switched meanwhile,
+        // including from a Retry or pull-to-refresh that .task(id:) can't
+        // cancel) or that was cancelled must not touch state; the newer load
+        // owns isLoading.
+        guard !Task.isCancelled, target == active else { return; }
         if let loaded = result.pool {
             pool = loaded;
             poolNames[loaded.id] = Self.displayName(loaded.name);
@@ -301,6 +326,7 @@ struct CollectionViewer: View {
         posts = result.posts;
         scrolledId = keep;
         loadFailed = result.failed;
+        loadedCollection = result.failed ? nil : target;
         isLoading = false;
         prefetchThumbnails(for: posts);
     }

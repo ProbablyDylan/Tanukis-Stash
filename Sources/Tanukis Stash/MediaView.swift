@@ -66,6 +66,19 @@ struct GIFView: View {
     }
 }
 
+// Hosts that keep media in the tree while hiding it (the collection viewer's
+// pager under its grid) set this false so videos pause instead of playing on.
+private struct MediaPlaybackActiveKey: EnvironmentKey {
+    static let defaultValue: Bool = true;
+}
+
+extension EnvironmentValues {
+    var isMediaPlaybackActive: Bool {
+        get { self[MediaPlaybackActiveKey.self] }
+        set { self[MediaPlaybackActiveKey.self] = newValue }
+    }
+}
+
 struct VideoView: View {
 
     let post: PostContent;
@@ -77,6 +90,9 @@ struct VideoView: View {
     // Set when scrolling away paused playback, so scrolling back resumes it
     // without touching a video the user paused themselves.
     @State private var pausedByScroll = false;
+    // Same, for the host hiding the media (see isMediaPlaybackActive).
+    @State private var pausedByInactive = false;
+    @Environment(\.isMediaPlaybackActive) private var playbackActive;
 
     enum Status { case loading, ready, failed, noVariant }
 
@@ -101,6 +117,18 @@ struct VideoView: View {
         }
         .onAppear { setupIfNeeded(); }
         .onDisappear { player?.pause(); }
+        .onChange(of: playbackActive) { _, active in
+            guard let player else { return; }
+            if !active {
+                if player.rate > 0 {
+                    pausedByInactive = true;
+                    player.pause();
+                }
+            } else if pausedByInactive {
+                pausedByInactive = false;
+                player.play();
+            }
+        }
         .onScrollVisibilityChange(threshold: 0.4) { visible in
             guard let player else { return; }
             if !visible {
