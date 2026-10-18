@@ -392,6 +392,13 @@ private struct PagePopover: View {
 
     private let collapsedDetailsHeight: CGFloat = 60;
     private let expandedDetailsHeight: CGFloat = 200;
+    private let maxWidth: CGFloat = 340;
+
+    // Fits the thumbnails when there are few (and no description to wrap),
+    // up to maxWidth; past that the strip scrolls.
+    private var width: CGFloat {
+        details == nil ? min(maxWidth, PageStrip.contentWidth(count: posts.count)) : maxWidth;
+    }
 
     private var detailsIsTruncated: Bool {
         detailsHeight > collapsedDetailsHeight;
@@ -406,7 +413,7 @@ private struct PagePopover: View {
             }
             PageStrip(posts: posts, currentId: currentId, onSelect: onSelect)
         }
-        .frame(width: 340)
+        .frame(width: width)
     }
 
     // The description is clamped to a few lines; "More" reveals the rest in a
@@ -438,10 +445,20 @@ private struct PageStrip: View {
     let currentId: Int?;
     let onSelect: (Int) -> Void;
 
+    private static let thumbnailWidth: CGFloat = 92;
+    private static let thumbnailHeight: CGFloat = 124;
+    private static let spacing: CGFloat = 10;
+    private static let padding: CGFloat = 12;
+
+    // The strip's natural width for `count` thumbnails.
+    static func contentWidth(count: Int) -> CGFloat {
+        CGFloat(count) * thumbnailWidth + CGFloat(max(0, count - 1)) * spacing + 2 * padding;
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 10) {
+                LazyHStack(spacing: Self.spacing) {
                     ForEach(Array(posts.enumerated()), id: \.element.id) { offset, post in
                         Button {
                             onSelect(post.id);
@@ -453,7 +470,7 @@ private struct PageStrip: View {
                         .id(post.id)
                     }
                 }
-                .padding(12)
+                .padding(Self.padding)
             }
             .onAppear {
                 if let currentId { proxy.scrollTo(currentId, anchor: .center); }
@@ -466,7 +483,7 @@ private struct PageStrip: View {
         KFImage(URL(string: post.preview.url ?? ""))
             .resizable()
             .scaledToFill()
-            .frame(width: 92, height: 124)
+            .frame(width: Self.thumbnailWidth, height: Self.thumbnailHeight)
             .background(Color.secondary.opacity(0.15))
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(alignment: .bottomTrailing) {
