@@ -120,20 +120,22 @@ struct SearchView: View {
             }
             // Separate items with fixed spacers keep each button in its own
             // glass capsule, apart from the search field.
-            ToolbarItem(placement: .bottomBar) {
-                Button("Saved Searches", systemImage: "bookmark") {
-                    searchSheet = .saved;
+            if !savedSearches.isEmpty {
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Saved Searches", systemImage: "bookmark") {
+                        searchSheet = .saved;
+                    }
                 }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
             }
             if !history.isEmpty {
-                ToolbarSpacer(.fixed, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
                         searchSheet = .history;
                     }
                 }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
             }
-            ToolbarSpacer(.fixed, placement: .bottomBar)
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             if !activeSearch.isEmpty {
                 let saved = isSavedSearch(activeSearch, in: savedSearches);

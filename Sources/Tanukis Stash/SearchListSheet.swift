@@ -51,7 +51,7 @@ struct SearchListSheet: View {
                             // Attached to the button so the system presents it as
                             // a popover from there, not a bottom action sheet.
                             .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
-                                Button("Clear Recent Searches", role: .destructive) { shelf.onClearHistory(); }
+                                Button("Clear", role: .destructive) { shelf.onClearHistory(); }
                             }
                     }
                 }
