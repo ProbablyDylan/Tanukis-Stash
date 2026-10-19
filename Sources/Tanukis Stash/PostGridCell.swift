@@ -27,28 +27,32 @@ struct PostGridCell: View, Equatable {
 
     private var iPhoneBody: some View {
         ZStack {
-            if let urlStr = post.preview.url {
-                KFImage(URL(string: urlStr))
-                    .placeholder {
-                        DelayedSpinner()
-                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .frame(width: 100, height: 150)
-                    }
-                    .resizable()
-                    .scaledToFill()
-                    .clipped()
-                    .frame(minWidth: 0, maxWidth: .infinity)
-                    .frame(height: 150)
-                    .shadow(color: Color.primary.opacity(0.3), radius: 1)
-            } else {
-                Text("Deleted")
-                    .frame(minWidth: 0, maxWidth: .infinity)
-                    .frame(height: 150)
-                    .background(Color.gray.opacity(0.90))
+            Group {
+                if let urlStr = post.preview.url {
+                    KFImage(URL(string: urlStr))
+                        .placeholder {
+                            DelayedSpinner()
+                                .frame(minWidth: 0, maxWidth: .infinity)
+                                .frame(width: 100, height: 150)
+                        }
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        .frame(height: 150)
+                } else {
+                    Text("Deleted")
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        .frame(height: 150)
+                        .background(Color.gray.opacity(0.90))
+                }
             }
+            // Clip only the single image layer; clipping the whole ZStack forces an
+            // offscreen mask pass per cell.
+            .clipShape(Self.cellShape)
             statsOverlay
+            cellEdge
         }
-        .cornerRadius(10)
         .padding(0.1)
     }
 
@@ -66,72 +70,85 @@ struct PostGridCell: View, Equatable {
                         .overlay(Text("Deleted").foregroundColor(.white))
                 }
             }
-            .clipped()
+            .clipShape(Self.cellShape)
             .overlay { statsOverlay }
-            .shadow(color: Color.primary.opacity(0.3), radius: 1)
-            .cornerRadius(10)
+            .overlay { cellEdge }
             .padding(0.1)
+    }
+
+    // The corner shape is shared by the clip, the scrim and the edge hairline so
+    // they line up.
+    private static let cornerRadius: CGFloat = 10;
+    private static var cellShape: RoundedRectangle { RoundedRectangle(cornerRadius: cornerRadius) }
+
+    // Hairline edge. Replaces a 1pt `.shadow`, which needs an offscreen pass per
+    // cell to derive the shadow shape from the layer's alpha.
+    private var cellEdge: some View {
+        Self.cellShape
+            .strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5)
+            .allowsHitTesting(false)
+    }
+
+    private var hasOverlayContent: Bool {
+        post.score.total != 0 || post.fav_count != 0 || post.comment_count != 0
+            || post.isInPool || post.hasFamily
     }
 
     private var statsOverlay: some View {
         VStack {
-            if post.isInPool || post.hasFamily {
-                membershipBadge
-            }
             Spacer()
-            HStack(spacing: 2) {
-                if post.score.total != 0 {
-                    Image(systemName: "arrowshape.up.fill")
-                    Text(post.score.total.formatted(.number.notation(.compactName)))
+            if hasOverlayContent {
+                // Stats stay centered like every other cell; the collection marker
+                // is pinned to the trailing edge of the same row.
+                ZStack(alignment: .trailing) {
+                    HStack(spacing: 2) {
+                        if post.score.total != 0 {
+                            Image(systemName: "arrowshape.up.fill")
+                            Text(post.score.total.formatted(.number.notation(.compactName)))
+                        }
+                        if post.fav_count != 0 {
+                            Image(systemName: "heart.fill")
+                                .padding(.leading, 1)
+                            Text(post.fav_count.formatted(.number.notation(.compactName)))
+                        }
+                        if post.comment_count != 0 {
+                            Image(systemName: "bubble.fill")
+                                .padding(.leading, 1)
+                            Text(post.comment_count.formatted(.number.notation(.compactName)))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    // One icon for "part of a collection" (pool or parent/children);
+                    // the viewer's page selector has the details.
+                    if post.isInPool || post.hasFamily {
+                        Image(systemName: "rectangle.stack.fill")
+                    }
                 }
-                if post.fav_count != 0 {
-                    Image(systemName: "heart.fill")
-                        .padding(.leading, 1)
-                    Text(post.fav_count.formatted(.number.notation(.compactName)))
-                }
-                if post.comment_count != 0 {
-                    Image(systemName: "bubble.fill")
-                        .padding(.leading, 1)
-                    Text(post.comment_count.formatted(.number.notation(.compactName)))
-                }
-            }
-            .cellOverlayStyle()
-            .frame(maxWidth: .infinity)
-            .padding(5.0)
-        }
-    }
-
-    // Top-trailing: pool membership (no count — pool size isn't in listings)
-    // and the parent+children count.
-    private var membershipBadge: some View {
-        HStack(spacing: 2) {
-            if post.isInPool {
-                Image(systemName: "rectangle.stack.fill")
-            }
-            if post.hasFamily {
-                Image(systemName: "square.on.square")
-                    .padding(.leading, post.isInPool ? 1 : 0)
-                if post.familyCount > 0 {
-                    Text(post.familyCount.formatted(.number.notation(.compactName)))
-                }
+                .cellOverlayStyle()
+                .padding(5.0)
             }
         }
-        .cellOverlayStyle()
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(5.0)
+        // Scrim for legibility instead of a text halo (compositingGroup + shadows
+        // are several offscreen passes per cell). Filled as a shape so the bottom
+        // corners follow the cell without a mask.
+        .background(alignment: .bottom) {
+            if hasOverlayContent {
+                UnevenRoundedRectangle(bottomLeadingRadius: Self.cornerRadius, bottomTrailingRadius: Self.cornerRadius)
+                    .fill(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom))
+                    .frame(height: 32)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 }
 
 private extension View {
-    // White bold 10pt text with the dark halo the stats row has always used.
+    // White bold 10pt text; legibility comes from the scrim / capsule behind it.
     func cellOverlayStyle() -> some View {
         self
             .font(.system(size: 10))
             .fontWeight(.bold)
             .foregroundColor(Color.white)
-            .compositingGroup()
-            .shadow(color: .black, radius: 3, x: 0, y: 1)
-            .shadow(color: .black.opacity(0.7), radius: 1, x: 0, y: 0)
     }
 }
 

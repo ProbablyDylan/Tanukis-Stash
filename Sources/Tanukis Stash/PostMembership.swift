@@ -11,9 +11,11 @@ extension PostContent {
             || relationships.has_active_children
     }
 
+    // Unused since the grid cell dropped its family-count badge for a single
+    // collection icon. Kept for reference.
     // Parent + listed children. `children` includes inactive posts, so this can
     // overstate what the viewer will show.
-    var familyCount: Int {
-        relationships.children.count + (relationships.parent_id == nil ? 0 : 1)
-    }
+    // var familyCount: Int {
+    //     relationships.children.count + (relationships.parent_id == nil ? 0 : 1)
+    // }
 }
