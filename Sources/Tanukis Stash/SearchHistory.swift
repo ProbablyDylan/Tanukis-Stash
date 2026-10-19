@@ -69,6 +69,31 @@ func toggleSavedSearch(_ query: String) -> [String] {
     return saved;
 }
 
+// A search term without its `-`/`~` prefix, or nil when it isn't a plain tag
+// (metatags like `rating:safe`, wildcards).
+func plainTagName(of term: Substring) -> String? {
+    let name = term.drop { $0 == "-" || $0 == "~" };
+    guard !name.isEmpty, !name.contains(":"), !name.contains("*") else { return nil; }
+    return String(name).lowercased();
+}
+
+// Tag-category colored text for a query: each tag takes its category color,
+// metatags go gray, anything the cache doesn't know stays primary.
+func coloredQuery(_ query: String, categories: [String: Int]) -> AttributedString {
+    var result = AttributedString();
+    for (index, term) in query.split(whereSeparator: \.isWhitespace).enumerated() {
+        if index > 0 { result += AttributedString(" "); }
+        var piece = AttributedString(String(term));
+        if let name = plainTagName(of: term) {
+            if let category = categories[name] { piece.foregroundColor = tagCategoryColor(category); }
+        } else if term.contains(":") {
+            piece.foregroundColor = .gray;
+        }
+        result += piece;
+    }
+    return result;
+}
+
 // What ChipBar needs to offer the history and saved-search shelves: the
 // lists plus the actions the chips and their context menus perform.
 struct SearchShelf {

@@ -160,9 +160,20 @@ struct TagView: View {
                     }
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                let saved = isSavedSearch(tagName, in: savedSearches);
+                Button(saved ? "Remove Saved Search" : "Save Search", systemImage: saved ? "bookmark.fill" : "bookmark") {
+                    savedSearches = toggleSavedSearch(tagName);
+                }
+                .sensoryFeedback(.selection, trigger: saved)
+            }
             if searchEnabled {
                 DefaultToolbarItem(kind: .search, placement: .bottomBar)
             }
+        }
+        .onAppear {
+            history = loadSearchHistory();
+            savedSearches = loadSavedSearches();
         }
         .refreshable {
             async let metadata: Void = loadMetadata();
@@ -179,13 +190,13 @@ struct TagView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if !isPadRegular && showsChipBar {
                         ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .transition(.chipBar(from: .bottom))
                     }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if isPadRegular && showsChipBar {
                         ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(.chipBar(from: .top))
                     }
                 }
                 .searchable(text: $search, prompt: "Search for tags")
@@ -199,10 +210,6 @@ struct TagView: View {
                         suggestionTask?.cancel();
                         withAnimation(.snappy) { searchSuggestions = []; }
                     }
-                }
-                .onAppear {
-                    history = loadSearchHistory();
-                    savedSearches = loadSavedSearches();
                 }
                 .onSubmit(of: .search) {
                     runSearch(search);

@@ -12,12 +12,25 @@ private enum ChipBarMode {
     case suggestions, history, saved
 }
 
+extension AnyTransition {
+    // The bar slides in with the keyboard but leaves with a quick fade: the
+    // gesture-driven keyboard dismissal is faster than the .snappy animation
+    // the search-active flag changes under, and the bar lingered behind it.
+    static func chipBar(from edge: Edge) -> AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: edge).combined(with: .opacity),
+            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+        )
+    }
+}
+
 struct ChipBar: View {
     let suggestions: [TagSuggestion];
     let onTap: (TagSuggestion) -> Void;
     // When set, leading chips swap the suggestions for recent or saved searches.
     var shelf: SearchShelf? = nil;
     @State private var mode: ChipBarMode = .suggestions;
+    @State private var queryCategories: [String: Int] = [:];
     @State private var displayed: [TagSuggestion] = [];
     @State private var popping: Set<TagSuggestion> = [];
 
@@ -95,6 +108,14 @@ struct ChipBar: View {
         .onAppear {
             withAnimation(.snappy) { displayed = suggestions; }
         }
+        .task(id: (shelf?.history ?? []) + (shelf?.saved ?? [])) {
+            let names = ((shelf?.history ?? []) + (shelf?.saved ?? []))
+                .flatMap { $0.split(whereSeparator: \.isWhitespace) }
+                .compactMap { plainTagName(of: $0) };
+            let categories = await Task.detached(priority: .userInitiated) { localTagCategories(names) }.value;
+            guard !Task.isCancelled else { return; }
+            queryCategories = categories;
+        }
         // Emptying the open shelf (last chip removed) falls back to suggestions.
         .onChange(of: shelf?.history) { _, new in
             if mode == .history && (new ?? []).isEmpty { withAnimation(.snappy) { mode = .suggestions; } }
@@ -134,7 +155,7 @@ struct ChipBar: View {
         Button {
             shelf.onSelect(query);
         } label: {
-            Text(query)
+            Text(coloredQuery(query, categories: queryCategories))
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(1)
                 .padding(.horizontal, 14)

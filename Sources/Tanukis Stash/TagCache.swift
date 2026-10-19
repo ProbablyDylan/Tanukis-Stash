@@ -77,6 +77,23 @@ func searchLocalTags(_ prefix: String, limit: Int = 10) -> [CachedTag] {
     }
 }
 
+// Category per tag name for the names the local cache knows; unknown names
+// are simply absent.
+func localTagCategories(_ names: [String]) -> [String: Int] {
+    let unique = Array(Set(names));
+    guard !unique.isEmpty, let db = try? openTagDatabase() else { return [:]; }
+    let placeholders = unique.map { _ in "?" }.joined(separator: ",");
+    do {
+        return try db.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT name, category FROM tags WHERE name IN (\(placeholders))", arguments: StatementArguments(unique));
+            return Dictionary(rows.map { (($0["name"] as String), ($0["category"] as Int)) }, uniquingKeysWith: { first, _ in first });
+        }
+    } catch {
+        os_log("Tag cache category lookup error: %{public}s", log: .default, error.localizedDescription);
+        return [:];
+    }
+}
+
 // The export is regenerated once a day, so a populated cache younger than that
 // has nothing new to pull. Anything older (or empty) gets a full resync.
 private let tagCacheMaxAge: TimeInterval = 24 * 60 * 60;

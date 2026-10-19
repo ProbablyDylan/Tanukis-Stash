@@ -100,13 +100,13 @@ struct SearchView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isPadRegular && showsChipBar {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.chipBar(from: .bottom))
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if isPadRegular && showsChipBar {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.chipBar(from: .top))
             }
         }
         .navigationBarTitleDisplayMode(.inline)
