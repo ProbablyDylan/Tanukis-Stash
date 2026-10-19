@@ -48,24 +48,10 @@ struct SearchListSheet: View {
                         Button("Clear Recent Searches", systemImage: "trash", role: .destructive) { confirmClear = true; }
                             .buttonStyle(.borderedProminent)
                             .tint(.red)
-                            // A popover rather than a confirmationDialog: dialog buttons
-                            // can't be styled, and this one should be red-filled.
-                            .popover(isPresented: $confirmClear) {
-                                VStack(spacing: 12) {
-                                    Text("Clear all recent searches?")
-                                        .font(.headline)
-                                    Button(role: .destructive) {
-                                        confirmClear = false;
-                                        shelf.onClearHistory();
-                                    } label: {
-                                        Text("Clear").frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.red)
-                                }
-                                .padding()
-                                .frame(minWidth: 240)
-                                .presentationCompactAdaptation(.popover)
+                            // Attached to the button so the system presents it as
+                            // a popover from there, not a bottom action sheet.
+                            .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
+                                Button("Clear", role: .destructive) { shelf.onClearHistory(); }
                             }
                     }
                 }
