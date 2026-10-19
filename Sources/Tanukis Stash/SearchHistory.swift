@@ -103,8 +103,6 @@ struct SearchShelf {
     let onToggleSaved: (String) -> Void;
     let onRemoveHistory: (String) -> Void;
     let onClearHistory: () -> Void;
-
-    var hasItems: Bool { !history.isEmpty || !saved.isEmpty }
 }
 
 // Wires a SearchShelf to the stores, writing the results back to the view's

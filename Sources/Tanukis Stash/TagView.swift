@@ -44,6 +44,7 @@ struct TagView: View {
     @State private var scrolledPostID: Int?;
     @State private var history = [String]();
     @State private var savedSearches = [String]();
+    @State private var searchSheet: SearchSheetKind?;
     @Environment(\.dismissSearch) private var dismissSearch;
     @Environment(\.isPadRegular) private var isPadRegular;
     @Environment(\.pushDestination) private var pushDestination;
@@ -168,6 +169,14 @@ struct TagView: View {
                 .sensoryFeedback(.selection, trigger: saved)
             }
             if searchEnabled {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                        searchSheet = .history;
+                    }
+                    Button("Saved Searches", systemImage: "bookmark") {
+                        searchSheet = .saved;
+                    }
+                }
                 DefaultToolbarItem(kind: .search, placement: .bottomBar)
             }
         }
@@ -188,16 +197,20 @@ struct TagView: View {
         if searchEnabled {
             tagContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !isPadRegular && showsChipBar {
-                        ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
+                    if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                             .transition(.chipBar(from: .bottom))
                     }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if isPadRegular && showsChipBar {
-                        ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
+                    if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                             .transition(.chipBar(from: .top))
                     }
+                }
+                .sheet(item: $searchSheet) { kind in
+                    SearchListSheet(kind: kind, shelf: shelf)
+                        .presentationDetents([.medium, .large])
                 }
                 .searchable(text: $search, prompt: "Search for tags")
                 .textInputAutocapitalization(.never)
@@ -224,10 +237,6 @@ struct TagView: View {
             search = query;
             runSearch(query);
         }
-    }
-
-    private var showsChipBar: Bool {
-        isSearchActive && (!searchSuggestions.isEmpty || shelf.hasItems)
     }
 
     // Shared by the keyboard's search key and the history/saved chips.

@@ -29,6 +29,7 @@ struct SearchView: View {
     @State private var isSearchActive: Bool = false;
     @State private var history = [String]();
     @State private var savedSearches = [String]();
+    @State private var searchSheet: SearchSheetKind?;
 
     var limit = 75;
 
@@ -91,21 +92,17 @@ struct SearchView: View {
         }
     }
 
-    private var showsChipBar: Bool {
-        isSearchActive && (!searchSuggestions.isEmpty || shelf.hasItems)
-    }
-
     var body: some View {
         postGrid
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !isPadRegular && showsChipBar {
-                ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
+            if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                     .transition(.chipBar(from: .bottom))
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if isPadRegular && showsChipBar {
-                ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
+            if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
                     .transition(.chipBar(from: .top))
             }
         }
@@ -121,6 +118,15 @@ struct SearchView: View {
                     showSettings = true;
                 }
             }
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                    searchSheet = .history;
+                }
+                Button("Saved Searches", systemImage: "bookmark") {
+                    searchSheet = .saved;
+                }
+            }
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
             if !activeSearch.isEmpty {
                 let saved = isSavedSearch(activeSearch, in: savedSearches);
                 ToolbarItem(placement: .topBarTrailing) {
@@ -141,6 +147,10 @@ struct SearchView: View {
         #endif
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(item: $searchSheet) { kind in
+            SearchListSheet(kind: kind, shelf: shelf)
+                .presentationDetents([.medium, .large])
         }
         .onChange(of: search) {
             if search.isEmpty && !activeSearch.isEmpty {
