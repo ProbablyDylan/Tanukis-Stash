@@ -27,6 +27,10 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
     @State private var shareItems: [Any] = [];
     @State private var showShareSheet = false;
     @State private var preparingShare = false;
+    // Haptics fire off an explicit tick, not the post's favorite/vote state:
+    // that state also changes when the pager swipes to another page.
+    @State private var hapticTick = 0;
+    @State private var haptic: SensoryFeedback = .selection;
 
     func body(content: Content) -> some View {
         content
@@ -39,6 +43,7 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
                 ActivityView(activityItems: shareItems)
             }
             .postToast(displayToastType: $displayToastType)
+            .sensoryFeedback(haptic, trigger: hapticTick)
             .onAppear {
                 authenticated = UserDefaults.standard.bool(forKey: UDKey.authenticated);
             }
@@ -111,16 +116,23 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
         .disabled(displayToastType == .inProgress || preparingShare)
     }
 
+    private func fireHaptic(_ feedback: SensoryFeedback) {
+        haptic = feedback;
+        hapticTick += 1;
+    }
+
     private func toggleFavorite(_ post: PostContent) {
         let id = post.id;
         let wasFavorited = post.is_favorited;
         mutate(id) { $0.is_favorited = !wasFavorited; };
+        fireHaptic(wasFavorited ? .impact(weight: .light) : .success);
         Task {
             let success = wasFavorited
                 ? await unFavoritePost(postId: id)
                 : await favoritePost(postId: id);
             guard success else {
                 mutate(id) { $0.is_favorited = wasFavorited; };
+                fireHaptic(.error);
                 return;
             }
             await refreshStats(postId: id);
@@ -130,8 +142,12 @@ struct PostActionsToolbar<Center: View>: ViewModifier {
     private func castVote(_ post: PostContent, value: Int) {
         let id = post.id;
         Task {
-            guard let ourScore = await votePost(postId: id, value: value, no_unvote: false) else { return; }
+            guard let ourScore = await votePost(postId: id, value: value, no_unvote: false) else {
+                fireHaptic(.error);
+                return;
+            }
             mutate(id) { $0.vote = ourScore; };
+            fireHaptic(ourScore == 0 ? .impact(weight: .light) : .impact(weight: .medium));
             await refreshStats(postId: id);
         }
     }
