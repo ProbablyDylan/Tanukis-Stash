@@ -8,6 +8,10 @@ import SwiftUI
 private let chipPopAnimation: Animation = .spring(response: 0.35, dampingFraction: 0.55);
 private let chipPopCleanupDelay: TimeInterval = 0.6; // must exceed chipPopAnimation settle time
 
+// One content height for every state, so the bar doesn't change size when a
+// shelf swaps in taller chips than the (possibly empty) suggestions row.
+private let chipBarContentHeight: CGFloat = 40;
+
 private enum ChipBarMode {
     case suggestions, history, saved
 }
@@ -65,6 +69,7 @@ struct ChipBar: View {
                                     .lineLimit(1)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 7)
+                                    .contentShape(.capsule)
                             }
                             .buttonStyle(.plain)
                             .glassEffect(.regular.tint(tagCategoryColor(tag.category)).interactive(), in: .capsule)
@@ -102,7 +107,7 @@ struct ChipBar: View {
                 }
                 .padding(.leading, hasToggles ? 4 : 12)
                 .padding(.trailing, 12)
-                .padding(.vertical, 6)
+                .frame(minHeight: chipBarContentHeight)
             }
             .mask(
                 LinearGradient(
@@ -118,6 +123,10 @@ struct ChipBar: View {
             )
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        // The bar swallows touches across its whole frame, as the scroll view
+        // alone used to; near-misses must not fall through to the post behind.
+        .contentShape(Rectangle())
         .onAppear {
             withAnimation(.snappy) { displayed = suggestions; }
         }
@@ -155,8 +164,8 @@ struct ChipBar: View {
             withAnimation(.snappy) { mode = isOn ? .suggestions : target; }
         } label: {
             Image(systemName: symbol)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .frame(minWidth: 44, minHeight: chipBarContentHeight)
+                .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .glassEffect(isOn ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .capsule)
@@ -173,6 +182,7 @@ struct ChipBar: View {
                 .lineLimit(1)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
+                .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .capsule)
