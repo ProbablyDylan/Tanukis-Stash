@@ -172,14 +172,16 @@ struct TagView: View {
                 // Separate items with fixed spacers keep each button in its own
                 // glass capsule, apart from the search field.
                 ToolbarItem(placement: .bottomBar) {
-                    Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
-                        searchSheet = .history;
-                    }
-                }
-                ToolbarSpacer(.fixed, placement: .bottomBar)
-                ToolbarItem(placement: .bottomBar) {
                     Button("Saved Searches", systemImage: "bookmark") {
                         searchSheet = .saved;
+                    }
+                }
+                if !history.isEmpty {
+                    ToolbarSpacer(.fixed, placement: .bottomBar)
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                            searchSheet = .history;
+                        }
                     }
                 }
                 ToolbarSpacer(.fixed, placement: .bottomBar)

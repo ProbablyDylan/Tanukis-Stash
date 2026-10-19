@@ -41,29 +41,21 @@ struct SearchListSheet: View {
             .navigationTitle(kind == .history ? "Recent Searches" : "Saved Searches")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(role: .close) { dismiss(); }
                 }
                 if kind == .history && !queries.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Clear Recent Searches", systemImage: "trash", role: .destructive) { confirmClear = true; }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.red)
+                            // Attached to the button so the system presents it as
+                            // a popover from there, not a bottom action sheet.
+                            .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
+                                Button("Clear Recent Searches", role: .destructive) { shelf.onClearHistory(); }
+                            }
                     }
                 }
-            }
-            .confirmationDialog(
-                "Delete this search?",
-                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil; } }),
-                titleVisibility: .visible,
-                presenting: pendingDelete
-            ) { query in
-                Button("Delete", role: .destructive) {
-                    if kind == .history { shelf.onRemoveHistory(query); } else { shelf.onToggleSaved(query); }
-                }
-            } message: { query in
-                Text(query)
-            }
-            .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear Recent Searches", role: .destructive) { shelf.onClearHistory(); }
             }
         }
         .task(id: queries) {
@@ -102,6 +94,18 @@ struct SearchListSheet: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button("Delete", systemImage: "trash") { pendingDelete = query; }
                 .tint(.red)
+        }
+        // Attached to the row so the system presents it from there.
+        .confirmationDialog(
+            "Delete this search?",
+            isPresented: Binding(get: { pendingDelete == query }, set: { if !$0 && pendingDelete == query { pendingDelete = nil; } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if kind == .history { shelf.onRemoveHistory(query); } else { shelf.onToggleSaved(query); }
+            }
+        } message: {
+            Text(query)
         }
         .swipeActions(edge: .leading) {
             if kind == .history {
