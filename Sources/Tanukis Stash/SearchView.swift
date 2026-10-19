@@ -27,6 +27,8 @@ struct SearchView: View {
     @State private var loadFailed: Bool = false;
     @State private var allLoaded: Bool = false;
     @State private var isSearchActive: Bool = false;
+    @State private var history = [String]();
+    @State private var savedSearches = [String]();
 
     var limit = 75;
 
@@ -82,17 +84,28 @@ struct SearchView: View {
         }
     }
 
+    private var shelf: SearchShelf {
+        makeSearchShelf(history: $history, saved: $savedSearches) { query in
+            search = query;
+            runSearch(query);
+        }
+    }
+
+    private var showsChipBar: Bool {
+        isSearchActive && (!searchSuggestions.isEmpty || shelf.hasItems)
+    }
+
     var body: some View {
         postGrid
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
-                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+            if !isPadRegular && showsChipBar {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
-                ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+            if isPadRegular && showsChipBar {
+                ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -106,6 +119,15 @@ struct SearchView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Settings", systemImage: "gearshape") {
                     showSettings = true;
+                }
+            }
+            if !activeSearch.isEmpty {
+                let saved = isSavedSearch(activeSearch, in: savedSearches);
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(saved ? "Remove Saved Search" : "Save Search", systemImage: saved ? "bookmark.fill" : "bookmark") {
+                        savedSearches = toggleSavedSearch(activeSearch);
+                    }
+                    .sensoryFeedback(.selection, trigger: saved)
                 }
             }
             if (AUTHENTICATED) {
@@ -139,19 +161,31 @@ struct SearchView: View {
                 withAnimation(.snappy) { searchSuggestions = []; }
             }
         }
+        .onAppear {
+            history = loadSearchHistory();
+            savedSearches = loadSavedSearches();
+        }
         .onSubmit(of: .search) {
-            let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines);
-            if isSingleTagQuery(trimmedSearch) {
-                pushDestination?(TagDestination(name: trimmedSearch));
+            runSearch(search);
+        }
+    }
+
+    // Shared by the keyboard's search key and the history/saved chips.
+    private func runSearch(_ text: String) {
+        let trimmedSearch = text.trimmingCharacters(in: .whitespacesAndNewlines);
+        guard !trimmedSearch.isEmpty else { return; }
+        suggestionTask?.cancel();
+        history = recordSearch(trimmedSearch);
+        if isSingleTagQuery(trimmedSearch) {
+            pushDestination?(TagDestination(name: trimmedSearch));
+            dismissSearch();
+        } else {
+            activeSearch = trimmedSearch;
+            resetForNewQuery();
+            Task.init {
+                await getPosts(append: false);
+                withAnimation(.snappy) { searchSuggestions.removeAll(); }
                 dismissSearch();
-            } else {
-                activeSearch = search;
-                resetForNewQuery();
-                Task.init {
-                    await getPosts(append: false);
-                    withAnimation(.snappy) { searchSuggestions.removeAll(); }
-                    dismissSearch();
-                }
             }
         }
     }

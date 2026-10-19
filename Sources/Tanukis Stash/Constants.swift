@@ -19,6 +19,8 @@ enum UDKey {
     static let imageCacheExpirationDays = "IMAGE_CACHE_EXPIRATION_DAYS";
     static let pagerNudgeShown = "PAGER_NUDGE_SHOWN";
     static let showBlacklistedInCollections = "SHOW_BLACKLISTED_IN_COLLECTIONS";
+    static let searchHistory = "SEARCH_HISTORY";
+    static let savedSearches = "SAVED_SEARCHES";
 }
 
 // Site the app talks to; e926 (safe) unless the user switched it in Settings.

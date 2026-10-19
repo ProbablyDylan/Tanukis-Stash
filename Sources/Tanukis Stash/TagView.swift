@@ -42,6 +42,8 @@ struct TagView: View {
     @State private var suggestionTask: Task<Void, Never>?;
     @State private var isSearchActive: Bool = false;
     @State private var scrolledPostID: Int?;
+    @State private var history = [String]();
+    @State private var savedSearches = [String]();
     @Environment(\.dismissSearch) private var dismissSearch;
     @Environment(\.isPadRegular) private var isPadRegular;
     @Environment(\.pushDestination) private var pushDestination;
@@ -175,14 +177,14 @@ struct TagView: View {
         if searchEnabled {
             tagContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
-                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                    if !isPadRegular && showsChipBar {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
-                        ChipBar(suggestions: searchSuggestions, onTap: applyChip)
+                    if isPadRegular && showsChipBar {
+                        ChipBar(suggestions: searchSuggestions, onTap: applyChip, shelf: shelf)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
@@ -198,19 +200,42 @@ struct TagView: View {
                         withAnimation(.snappy) { searchSuggestions = []; }
                     }
                 }
+                .onAppear {
+                    history = loadSearchHistory();
+                    savedSearches = loadSavedSearches();
+                }
                 .onSubmit(of: .search) {
-                    let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines);
-                    if isSingleTagQuery(trimmed) {
-                        pushDestination?(TagDestination(name: trimmed));
-                    } else {
-                        pushDestination?(SearchDestination(query: trimmed));
-                    }
-                    withAnimation(.snappy) { searchSuggestions.removeAll(); }
-                    dismissSearch();
+                    runSearch(search);
                 }
         } else {
             tagContent
         }
+    }
+
+    private var shelf: SearchShelf {
+        makeSearchShelf(history: $history, saved: $savedSearches) { query in
+            search = query;
+            runSearch(query);
+        }
+    }
+
+    private var showsChipBar: Bool {
+        isSearchActive && (!searchSuggestions.isEmpty || shelf.hasItems)
+    }
+
+    // Shared by the keyboard's search key and the history/saved chips.
+    private func runSearch(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines);
+        guard !trimmed.isEmpty else { return; }
+        suggestionTask?.cancel();
+        history = recordSearch(trimmed);
+        if isSingleTagQuery(trimmed) {
+            pushDestination?(TagDestination(name: trimmed));
+        } else {
+            pushDestination?(SearchDestination(query: trimmed));
+        }
+        withAnimation(.snappy) { searchSuggestions.removeAll(); }
+        dismissSearch();
     }
 
     func applyChip(_ tag: TagSuggestion) {
