@@ -19,6 +19,7 @@ struct SearchListSheet: View {
     @Environment(\.dismiss) private var dismiss;
     @State private var categories: [String: Int] = [:];
     @State private var confirmClear = false;
+    @State private var pendingDelete: String?;
 
     private var queries: [String] {
         kind == .history ? shelf.history : shelf.saved
@@ -40,14 +41,26 @@ struct SearchListSheet: View {
             .navigationTitle(kind == .history ? "Recent Searches" : "Saved Searches")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss(); }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(role: .close) { dismiss(); }
                 }
                 if kind == .history && !queries.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Clear", role: .destructive) { confirmClear = true; }
+                        Button("Clear Recent Searches", systemImage: "trash", role: .destructive) { confirmClear = true; }
                     }
                 }
+            }
+            .confirmationDialog(
+                "Delete this search?",
+                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil; } }),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { query in
+                Button("Delete", role: .destructive) {
+                    if kind == .history { shelf.onRemoveHistory(query); } else { shelf.onToggleSaved(query); }
+                }
+            } message: { query in
+                Text(query)
             }
             .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("Clear Recent Searches", role: .destructive) { shelf.onClearHistory(); }
@@ -84,12 +97,11 @@ struct SearchListSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .swipeActions(edge: .trailing) {
-            if kind == .history {
-                Button("Delete", systemImage: "trash", role: .destructive) { shelf.onRemoveHistory(query); }
-            } else {
-                Button("Remove", systemImage: "bookmark.slash", role: .destructive) { shelf.onToggleSaved(query); }
-            }
+        // Not a destructive-role button: that would drop the row before the
+        // confirmation is answered.
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button("Delete", systemImage: "trash") { pendingDelete = query; }
+                .tint(.red)
         }
         .swipeActions(edge: .leading) {
             if kind == .history {
