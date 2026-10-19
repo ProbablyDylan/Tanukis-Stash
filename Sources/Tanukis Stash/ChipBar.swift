@@ -34,10 +34,17 @@ struct ChipBar: View {
     @State private var displayed: [TagSuggestion] = [];
     @State private var popping: Set<TagSuggestion> = [];
 
+    private var hasToggles: Bool {
+        guard let shelf else { return false; }
+        return !shelf.history.isEmpty || !shelf.saved.isEmpty;
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let shelf {
+        // The shelf toggles are pinned outside the scroll view, so suggestions
+        // slide in from the scroll region's clipped edge instead of over them.
+        HStack(spacing: 8) {
+            if let shelf, hasToggles {
+                HStack(spacing: 8) {
                     if !shelf.history.isEmpty {
                         shelfToggle(.history, symbol: "clock.arrow.trianglehead.counterclockwise.rotate.90", label: "Recent searches");
                     }
@@ -45,66 +52,72 @@ struct ChipBar: View {
                         shelfToggle(.saved, symbol: mode == .saved ? "bookmark.fill" : "bookmark", label: "Saved searches");
                     }
                 }
-                switch mode {
-                case .suggestions:
-                    ForEach(displayed, id: \.self) { tag in
-                        Button(action: { handleTap(tag); }) {
-                            Text(tag.name)
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(1)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
+                .padding(.leading, 12)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    switch mode {
+                    case .suggestions:
+                        ForEach(displayed, id: \.self) { tag in
+                            Button(action: { handleTap(tag); }) {
+                                Text(tag.name)
+                                    .font(.system(.body, design: .monospaced))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                            }
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.tint(tagCategoryColor(tag.category)).interactive(), in: .capsule)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: popping.contains(tag)
+                                    ? AnyTransition.scale(scale: 1.4).combined(with: .opacity)
+                                    : AnyTransition.opacity
+                            ))
                         }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.tint(tagCategoryColor(tag.category)).interactive(), in: .capsule)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal: popping.contains(tag)
-                                ? AnyTransition.scale(scale: 1.4).combined(with: .opacity)
-                                : AnyTransition.opacity
-                        ))
-                    }
-                case .history:
-                    if let shelf {
-                        ForEach(shelf.history, id: \.self) { query in
-                            queryChip(query, shelf: shelf)
-                                .contextMenu {
-                                    Button(isSavedSearch(query, in: shelf.saved) ? "Remove from Saved" : "Save Search",
-                                           systemImage: isSavedSearch(query, in: shelf.saved) ? "bookmark.slash" : "bookmark") {
-                                        shelf.onToggleSaved(query);
+                    case .history:
+                        if let shelf {
+                            ForEach(shelf.history, id: \.self) { query in
+                                queryChip(query, shelf: shelf)
+                                    .contextMenu {
+                                        Button(isSavedSearch(query, in: shelf.saved) ? "Remove from Saved" : "Save Search",
+                                               systemImage: isSavedSearch(query, in: shelf.saved) ? "bookmark.slash" : "bookmark") {
+                                            shelf.onToggleSaved(query);
+                                        }
+                                        Button("Remove from Recent", systemImage: "xmark") { shelf.onRemoveHistory(query); }
+                                        Button("Clear Recent Searches", systemImage: "trash", role: .destructive) { shelf.onClearHistory(); }
                                     }
-                                    Button("Remove from Recent", systemImage: "xmark") { shelf.onRemoveHistory(query); }
-                                    Button("Clear Recent Searches", systemImage: "trash", role: .destructive) { shelf.onClearHistory(); }
-                                }
+                            }
                         }
-                    }
-                case .saved:
-                    if let shelf {
-                        ForEach(shelf.saved, id: \.self) { query in
-                            queryChip(query, shelf: shelf)
-                                .contextMenu {
-                                    Button("Remove from Saved", systemImage: "bookmark.slash") { shelf.onToggleSaved(query); }
-                                }
+                    case .saved:
+                        if let shelf {
+                            ForEach(shelf.saved, id: \.self) { query in
+                                queryChip(query, shelf: shelf)
+                                    .contextMenu {
+                                        Button("Remove from Saved", systemImage: "bookmark.slash") { shelf.onToggleSaved(query); }
+                                    }
+                            }
                         }
                     }
                 }
+                .padding(.leading, hasToggles ? 4 : 12)
+                .padding(.trailing, 12)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .black, location: 0.04),
+                        .init(color: .black, location: 0.96),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         }
         .frame(maxWidth: .infinity)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .black, location: 0.04),
-                    .init(color: .black, location: 0.96),
-                    .init(color: .clear, location: 1.0),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
         .onAppear {
             withAnimation(.snappy) { displayed = suggestions; }
         }
