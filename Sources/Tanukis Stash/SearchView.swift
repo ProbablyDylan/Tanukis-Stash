@@ -155,7 +155,10 @@ struct SearchView: View {
             }
         }
         #endif
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: {
+            // History may have been turned off (and cleared) in Settings.
+            history = loadSearchHistory();
+        }) {
             SettingsView()
         }
         .sheet(item: $searchSheet) { kind in

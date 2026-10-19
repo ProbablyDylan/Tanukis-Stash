@@ -19,6 +19,8 @@ struct SearchListSheet: View {
     @Environment(\.dismiss) private var dismiss;
     @State private var categories: [String: Int] = [:];
     @State private var confirmClear = false;
+    // Set by the first Clear ever, so the empty state can mention Settings once.
+    @State private var showClearHint = false;
 
     private var queries: [String] {
         kind == .history ? shelf.history : shelf.saved
@@ -51,7 +53,7 @@ struct SearchListSheet: View {
                             // Attached to the button so the system presents it as
                             // a popover from there, not a bottom action sheet.
                             .confirmationDialog("Clear all recent searches?", isPresented: $confirmClear, titleVisibility: .visible) {
-                                Button("Clear", role: .destructive) { shelf.onClearHistory(); }
+                                Button("Clear", role: .destructive) { clearHistory(); }
                             }
                     }
                 }
@@ -67,10 +69,18 @@ struct SearchListSheet: View {
         }
     }
 
+    private func clearHistory() {
+        shelf.onClearHistory();
+        if !UserDefaults.standard.bool(forKey: UDKey.searchHistoryClearHintShown) {
+            UserDefaults.standard.set(true, forKey: UDKey.searchHistoryClearHintShown);
+            showClearHint = true;
+        }
+    }
+
     @ViewBuilder
     private var emptyState: some View {
         if kind == .history {
-            ContentUnavailableView("No Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90", description: Text("Searches you run show up here."))
+            ContentUnavailableView("No Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90", description: Text(showClearHint ? "History can be disabled in Settings." : "Searches you run show up here."))
         } else {
             ContentUnavailableView("No Saved Searches", systemImage: "bookmark", description: Text("Tap the bookmark on a search's results to keep it here."))
         }

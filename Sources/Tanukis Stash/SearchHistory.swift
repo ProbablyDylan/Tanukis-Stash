@@ -37,7 +37,7 @@ func isSavedSearch(_ query: String, in saved: [String]) -> Bool {
 @discardableResult
 func recordSearch(_ query: String) -> [String] {
     let normalized = normalizedSearch(query);
-    guard !normalized.isEmpty else { return loadSearchHistory(); }
+    guard savesSearchHistory(), !normalized.isEmpty else { return loadSearchHistory(); }
     var history = loadSearchHistory().filter { !sameSearch($0, normalized) };
     history.insert(normalized, at: 0);
     history = Array(history.prefix(searchHistoryLimit));
