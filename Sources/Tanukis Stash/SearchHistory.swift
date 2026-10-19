@@ -112,8 +112,8 @@ func makeSearchShelf(history: Binding<[String]>, saved: Binding<[String]>, onSel
         history: history.wrappedValue,
         saved: saved.wrappedValue,
         onSelect: onSelect,
-        onToggleSaved: { saved.wrappedValue = toggleSavedSearch($0); },
-        onRemoveHistory: { history.wrappedValue = removeSearchHistory($0); },
-        onClearHistory: { history.wrappedValue = clearSearchHistory(); }
+        onToggleSaved: { query in withAnimation { saved.wrappedValue = toggleSavedSearch(query); } },
+        onRemoveHistory: { query in withAnimation { history.wrappedValue = removeSearchHistory(query); } },
+        onClearHistory: { withAnimation { history.wrappedValue = clearSearchHistory(); } }
     );
 }

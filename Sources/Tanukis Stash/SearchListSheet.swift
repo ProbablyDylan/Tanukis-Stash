@@ -19,7 +19,6 @@ struct SearchListSheet: View {
     @Environment(\.dismiss) private var dismiss;
     @State private var categories: [String: Int] = [:];
     @State private var confirmClear = false;
-    @State private var pendingDelete: String?;
 
     private var queries: [String] {
         kind == .history ? shelf.history : shelf.saved
@@ -89,27 +88,11 @@ struct SearchListSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        // A recent line is cheap to lose, so it deletes outright; only Clear
-        // confirms. A saved search was kept on purpose, so it confirms. That
-        // one isn't a destructive-role button: it would drop the row before the
-        // confirmation is answered.
-        .swipeActions(edge: .trailing, allowsFullSwipe: kind == .history) {
-            if kind == .history {
-                Button("Delete", systemImage: "trash", role: .destructive) { shelf.onRemoveHistory(query); }
-            } else {
-                Button("Delete", systemImage: "trash") { pendingDelete = query; }
-                    .tint(.red)
+        // A single line deletes outright; only Clear confirms.
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                if kind == .history { shelf.onRemoveHistory(query); } else { shelf.onToggleSaved(query); }
             }
-        }
-        // Saved only; attached to the row so the system presents it from there.
-        .confirmationDialog(
-            "Delete this saved search?",
-            isPresented: Binding(get: { pendingDelete == query }, set: { if !$0 && pendingDelete == query { pendingDelete = nil; } }),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) { shelf.onToggleSaved(query); }
-        } message: {
-            Text(query)
         }
         .swipeActions(edge: .leading) {
             if kind == .history {
