@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var ENABLE_AIRPLAY: Bool = UserDefaults.standard.bool(forKey: UDKey.enableAirplay);
     @State private var ENABLE_BLACKLIST: Bool = UserDefaults.standard.bool(forKey: UDKey.enableBlacklist);
     @State private var SHOW_BLACKLISTED_IN_COLLECTIONS: Bool = showsBlacklistedInCollections();
+    @State private var SAVE_SEARCH_HISTORY: Bool = savesSearchHistory();
     @AppStorage(UDKey.authenticated) private var AUTHENTICATED: Bool = false;
     @State private var USER_ICON: String = UserDefaults.standard.string(forKey: UDKey.userIcon) ?? "";
     @State private var showingBlacklistEditor: Bool = false;
@@ -104,7 +105,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("App Settings")) {
+                Section(header: Text("App Settings"), footer: Text("Recent searches stay on this device. Turning history off clears them.")) {
                     Picker("API Source", selection: $selection) {
                         ForEach(sources, id: \.self) {
                             Text($0)
@@ -118,6 +119,12 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .onChange(of: ENABLE_AIRPLAY) {
                             UserDefaults.standard.set(ENABLE_AIRPLAY, forKey: UDKey.enableAirplay);
+                        }
+                    Toggle("Save Search History", isOn: $SAVE_SEARCH_HISTORY)
+                        .toggleStyle(.switch)
+                        .onChange(of: SAVE_SEARCH_HISTORY) {
+                            UserDefaults.standard.set(SAVE_SEARCH_HISTORY, forKey: UDKey.saveSearchHistory);
+                            if !SAVE_SEARCH_HISTORY { _ = clearSearchHistory(); }
                         }
                 }
 

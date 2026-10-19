@@ -27,6 +27,9 @@ struct SearchView: View {
     @State private var loadFailed: Bool = false;
     @State private var allLoaded: Bool = false;
     @State private var isSearchActive: Bool = false;
+    @State private var history = [String]();
+    @State private var savedSearches = [String]();
+    @State private var searchSheet: SearchSheetKind?;
 
     var limit = 75;
 
@@ -82,18 +85,25 @@ struct SearchView: View {
         }
     }
 
+    private var shelf: SearchShelf {
+        makeSearchShelf(history: $history, saved: $savedSearches) { query in
+            search = query;
+            runSearch(query);
+        }
+    }
+
     var body: some View {
         postGrid
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.chipBar(from: .bottom))
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if isPadRegular && isSearchActive && !searchSuggestions.isEmpty {
                 ChipBar(suggestions: searchSuggestions, onTap: applyChip)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.chipBar(from: .top))
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -108,6 +118,34 @@ struct SearchView: View {
                     showSettings = true;
                 }
             }
+            // Separate items with fixed spacers keep each button in its own
+            // glass capsule, apart from the search field.
+            if !savedSearches.isEmpty {
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Saved Searches", systemImage: "bookmark") {
+                        searchSheet = .saved;
+                    }
+                }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
+            }
+            if !history.isEmpty {
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Recent Searches", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                        searchSheet = .history;
+                    }
+                }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
+            }
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            if !activeSearch.isEmpty {
+                let saved = isSavedSearch(activeSearch, in: savedSearches);
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(saved ? "Remove Saved Search" : "Save Search", systemImage: saved ? "bookmark.fill" : "bookmark") {
+                        savedSearches = toggleSavedSearch(activeSearch);
+                    }
+                    .sensoryFeedback(.selection, trigger: saved)
+                }
+            }
             if (AUTHENTICATED) {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: FavoritesDestination()) {
@@ -117,8 +155,15 @@ struct SearchView: View {
             }
         }
         #endif
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: {
+            // History may have been turned off (and cleared) in Settings.
+            history = loadSearchHistory();
+        }) {
             SettingsView()
+        }
+        .sheet(item: $searchSheet) { kind in
+            SearchListSheet(kind: kind, shelf: shelf)
+                .presentationDetents([.medium, .large])
         }
         .onChange(of: search) {
             if search.isEmpty && !activeSearch.isEmpty {
@@ -139,19 +184,31 @@ struct SearchView: View {
                 withAnimation(.snappy) { searchSuggestions = []; }
             }
         }
+        .onAppear {
+            history = loadSearchHistory();
+            savedSearches = loadSavedSearches();
+        }
         .onSubmit(of: .search) {
-            let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines);
-            if isSingleTagQuery(trimmedSearch) {
-                pushDestination?(TagDestination(name: trimmedSearch));
+            runSearch(search);
+        }
+    }
+
+    // Shared by the keyboard's search key and the history/saved chips.
+    private func runSearch(_ text: String) {
+        let trimmedSearch = text.trimmingCharacters(in: .whitespacesAndNewlines);
+        guard !trimmedSearch.isEmpty else { return; }
+        suggestionTask?.cancel();
+        history = recordSearch(trimmedSearch);
+        if isSingleTagQuery(trimmedSearch) {
+            pushDestination?(TagDestination(name: trimmedSearch));
+            dismissSearch();
+        } else {
+            activeSearch = trimmedSearch;
+            resetForNewQuery();
+            Task.init {
+                await getPosts(append: false);
+                withAnimation(.snappy) { searchSuggestions.removeAll(); }
                 dismissSearch();
-            } else {
-                activeSearch = search;
-                resetForNewQuery();
-                Task.init {
-                    await getPosts(append: false);
-                    withAnimation(.snappy) { searchSuggestions.removeAll(); }
-                    dismissSearch();
-                }
             }
         }
     }

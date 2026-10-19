@@ -19,6 +19,10 @@ enum UDKey {
     static let imageCacheExpirationDays = "IMAGE_CACHE_EXPIRATION_DAYS";
     static let pagerNudgeShown = "PAGER_NUDGE_SHOWN";
     static let showBlacklistedInCollections = "SHOW_BLACKLISTED_IN_COLLECTIONS";
+    static let searchHistory = "SEARCH_HISTORY";
+    static let savedSearches = "SAVED_SEARCHES";
+    static let saveSearchHistory = "SAVE_SEARCH_HISTORY";
+    static let searchHistoryClearHintShown = "SEARCH_HISTORY_CLEAR_HINT_SHOWN";
 }
 
 // Site the app talks to; e926 (safe) unless the user switched it in Settings.
@@ -30,6 +34,11 @@ func apiDomain() -> String {
 // missing is worse than one page you'd rather not see. Unset means on.
 func showsBlacklistedInCollections() -> Bool {
     UserDefaults.standard.object(forKey: UDKey.showBlacklistedInCollections) as? Bool ?? true;
+}
+
+// Recent searches are recorded unless the user turned that off. Unset means on.
+func savesSearchHistory() -> Bool {
+    UserDefaults.standard.object(forKey: UDKey.saveSearchHistory) as? Bool ?? true;
 }
 
 enum ImageCacheSizeLimit: Int, CaseIterable, Identifiable {

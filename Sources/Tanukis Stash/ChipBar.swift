@@ -8,6 +8,18 @@ import SwiftUI
 private let chipPopAnimation: Animation = .spring(response: 0.35, dampingFraction: 0.55);
 private let chipPopCleanupDelay: TimeInterval = 0.6; // must exceed chipPopAnimation settle time
 
+extension AnyTransition {
+    // The bar slides in with the keyboard but leaves with a quick fade: the
+    // gesture-driven keyboard dismissal is faster than the .snappy animation
+    // the search-active flag changes under, and the bar lingered behind it.
+    static func chipBar(from edge: Edge) -> AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: edge).combined(with: .opacity),
+            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+        )
+    }
+}
+
 struct ChipBar: View {
     let suggestions: [TagSuggestion];
     let onTap: (TagSuggestion) -> Void;
